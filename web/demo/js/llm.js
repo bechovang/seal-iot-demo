@@ -33,7 +33,7 @@
     const key = getKey();
     if (!key) throw new Error('no-key');
     const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeoutMs || 20000) : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeoutMs || 180000) : null;
     try {
       const res = await fetch(ENDPOINT, {
         method: 'POST',
@@ -65,7 +65,7 @@
   /* ---------- ping: kiểm tra key sống/chết ---------- */
   async function ping() {
     try {
-      const out = await chat([{ role: 'user', content: 'Trả lời đúng 2 chữ: OK VN' }], { timeoutMs: 15000, maxTokens: 250 });
+      const out = await chat([{ role: 'user', content: 'Trả lời đúng 2 chữ: OK VN' }], { timeoutMs: 30000, maxTokens: 250 });
       return out.length > 0;
     } catch (e) { return false; }
   }
@@ -73,20 +73,20 @@
   /* ---------- 1) NL task parser → JSON (được validate lại bằng symbolic) ---------- */
   async function parseTask(userText, deviceIds) {
     const sys = `Bạn là bộ phân tích yêu cầu vận hành nhà máy. Từ câu của kỹ sư, chọn đúng 1 thiết bị và loại nhiệm vụ.
-Thiết bị hợp lệ: ${deviceIds.join(', ')}.
-taskType hợp lệ: inspection (kiểm tra/bảo trì), conflict (xung đột gas/an toàn vs đơn hàng), timeout (lỗi kết nối/tool), generic (khác).
+Thiết bị hợp lệ: ${deviceIds.join(', ')}. Nếu câu không nhắc thiết bị cụ thể, chọn thiết bị liên quan nhất hoặc thiết bị đầu tiên.
+taskType hợp lệ: inspection (kiểm tra/bảo trì/xử lý sự cố), conflict (xung đột gas/an toàn vs đơn hàng), timeout (lỗi kết nối/tool), question (chỉ hỏi đáp về trạng thái nhà máy, KHÔNG cần hành động), generic (yêu cầu hành động khác).
 Chỉ trả JSON: {"device":"...","taskType":"...","explain":"<1 câu tiếng Việt>"}`;
     const raw = await chat([
       { role: 'system', content: sys },
       { role: 'user', content: userText },
-    ], { timeoutMs: 20000, maxTokens: 450, temperature: 0.1 });
+    ], { timeoutMs: 180000, maxTokens: 450, temperature: 0.1 });
     const m = /\{[\s\S]*\}/.exec(raw);
     if (!m) return null;
     try {
       const j = JSON.parse(m[0]);
       // symbolic guard: chỉ chấp nhận giá trị hợp lệ — LLM hallucinate thì fallback
       if (!deviceIds.includes(j.device)) return null;
-      if (!['inspection', 'conflict', 'timeout', 'generic'].includes(j.taskType)) j.taskType = 'generic';
+      if (!['inspection', 'conflict', 'timeout', 'generic', 'question'].includes(j.taskType)) j.taskType = 'generic';
       return j;
     } catch (e) { return null; }
   }
@@ -97,7 +97,7 @@ Chỉ trả JSON: {"device":"...","taskType":"...","explain":"<1 câu tiếng Vi
     const raw = await chat([
       { role: 'system', content: sys },
       { role: 'user', content: JSON.stringify(payload) },
-    ], { timeoutMs: 30000, maxTokens: 900 });
+    ], { timeoutMs: 180000, maxTokens: 2000 });
     return raw;
   }
 
@@ -107,17 +107,17 @@ Chỉ trả JSON: {"device":"...","taskType":"...","explain":"<1 câu tiếng Vi
     const raw = await chat([
       { role: 'system', content: sys },
       { role: 'user', content: JSON.stringify(payload) },
-    ], { timeoutMs: 30000, maxTokens: 700 });
+    ], { timeoutMs: 180000, maxTokens: 1500 });
     return raw;
   }
 
   /* ---------- 4) Operator chat — hỏi đáp trạng thái nhà máy từ LIVE state ---------- */
   async function chatAssistant(question, liveState) {
-    const sys = `Bạn là trợ lý AI vận hành nhà máy thông minh. Trả lời câu hỏi của kỹ sư bằng tiếng Việt, tối đa 4 câu, dựa CHỈ vào LIVE_STATE JSON và INCIDENT_LOG (danh sách doc-node sự cố có timestamp, đã lọc theo khung thời gian được hỏi). Nếu câu hỏi như "5 phút vừa rồi có gì" "gần đây bất thường gì": trả lời theo INCIDENT_LOG trong khoảng đó (nêu thời điểm, thiết bị, mức độ, doc ngắn gọn). Nếu dữ liệu không đủ, nói rõ. Không bịa số liệu.`;
+    const sys = `Bạn là trợ lý AI vận hành nhà máy thông minh. Trả lời câu hỏi của kỹ sư bằng tiếng Việt, tối đa 4 câu, dựa CHỈ vào LIVE_STATE JSON — trong đó: recentIncidents = doc-node sự cố, alarmDigests = các node wiki tóm tắt alarm 1 phút/lần (mỗi node có from/to, số alarm và nội dung chi tiết từng thiết bị:tín hiệu), cả hai đã lọc theo khung thời gian được hỏi. Nếu câu hỏi như "5 phút vừa rồi có gì" "kiểm tra giúp anh" "gần đây bất thường gì": trả lời theo recentIncidents + alarmDigests trong khoảng đó (nêu thời điểm, thiết bị, mức độ, tín hiệu vượt ngưỡng, doc ngắn gọn; nếu có alarm đang ACTIVE thì khuyến nghị kiểm tra). Nếu dữ liệu không đủ, nói rõ. Không bịa số liệu.`;
     const raw = await chat([
       { role: 'system', content: sys },
       { role: 'user', content: `LIVE_STATE=${JSON.stringify(liveState)}\n\nCâu hỏi: ${question}` },
-    ], { timeoutMs: 30000, maxTokens: 800 });
+    ], { timeoutMs: 180000, maxTokens: 4096 });
     return raw;
   }
 
@@ -127,7 +127,7 @@ Chỉ trả JSON: {"device":"...","taskType":"...","explain":"<1 câu tiếng Vi
     const raw = await chat([
       { role: 'system', content: sys },
       { role: 'user', content: JSON.stringify(payload) },
-    ], { timeoutMs: 15000, maxTokens: 250 });
+    ], { timeoutMs: 60000, maxTokens: 500 });
     return raw;
   }
 
@@ -138,7 +138,7 @@ Chỉ trả JSON: {"device":"...","taskType":"...","explain":"<1 câu tiếng Vi
     const raw = await chat([
       { role: 'system', content: sys },
       { role: 'user', content: JSON.stringify(payload) },
-    ], { timeoutMs: 30000, maxTokens: 1200 });
+    ], { timeoutMs: 180000, maxTokens: 2500 });
     return raw;
   }
 

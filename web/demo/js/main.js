@@ -230,6 +230,80 @@
 
 
 
+  /* ------------- AlarmLog → wiki node MỖI 1 PHÚT (để chat AI kiểm tra là biết) -------------
+     Mỗi 60s gom alarm mới ghi vào AlarmLog (+ alarm vừa phục hồi) → viết thành 1 node
+     wiki (taskType='alarm-digest', window thời gian). Chat AI đọc node này qua
+     liveFactoryState().alarmDigests lọc theo khung thời gian câu hỏi. */
+  const DIGEST_MS = 60000;
+  let lastDigestTs = Date.now();
+  let digestSeq = 0;
+  const digestTime = ts => new Date(ts).toLocaleTimeString('en-GB');
+  function writeAlarmDigest() {
+    if (typeof AlarmLog === 'undefined' || typeof pushWikiNode !== 'function') return;
+    const now = Date.now();
+    const since = lastDigestTs;
+    lastDigestTs = now;
+    const all = AlarmLog.all();
+    const fresh = all.filter(a => a.ts > since && a.ts <= now);
+    const newlyResolved = all.filter(a => a.status === 'RESOLVED' && a.resolvedTs && a.resolvedTs > since && a.ts <= since);
+    if (!fresh.length && !newlyResolved.length) return;   // phút yên tĩnh → không ghi node rỗng
+
+    const crit = fresh.filter(a => a.severity === 'CRITICAL');
+    const warn = fresh.filter(a => a.severity === 'WARNING');
+    const active = AlarmLog.active();
+    const lines = [
+      `⏱ ${digestTime(since)} → ${digestTime(now)}: ${fresh.length} alarm mới (${crit.length} CRITICAL / ${warn.length} WARNING) · ${newlyResolved.length} phục hồi · đang ACTIVE: ${active.length}.`,
+    ];
+    fresh.slice(-12).forEach(a => lines.push(
+      `• ${digestTime(a.ts)} ${a.severity} ${a.device}:${a.signal} = ${a.value} (bt ${a.normal}, lệch ${a.pct}%) [${a.source}] → ${a.status === 'ACTIVE' ? 'đang ACTIVE' : 'phục hồi ' + digestTime(a.resolvedTs)}`));
+    newlyResolved.slice(-6).forEach(a => lines.push(
+      `✓ ${digestTime(a.resolvedTs)} phục hồi ${a.device}:${a.signal} (alarm mở từ ${digestTime(a.ts)})`));
+    if (active.length) lines.push('🔎 Cần kiểm tra ngay: ' + active.map(a => `${a.device}:${a.signal} (${a.severity})`).join(', '));
+
+    const id = 'alarm-digest-' + (++digestSeq) + '-' + new Date(now).toISOString().slice(11, 19).replace(/:/g, '');
+    pushWikiNode({
+      id, device: 'FACTORY', taskType: 'alarm-digest',
+      symptoms: Array.from(new Set(fresh.map(a => a.device + ':' + a.signal))),
+      occurrences: fresh.length,
+      content: lines.join('\n'),
+      window: { from: since, to: now },
+    });
+    renderRunbooks(); renderRunbookBoard();
+    traceRow('TRACE', 'Wiki', `🧾 Node wiki ${id}: tóm tắt ${fresh.length} alarm của 60s vừa rồi — chat AI có thể tra cứu.`);
+    emitSyslog(`📚 Alarm digest → wiki: ${fresh.length} alarm mới trong 1 phút (node ${id}).`);
+  }
+
+  /* Nút "Tổng hợp 10 → wiki" trong tab Alarm Log: lấy 10 alarm MỚI NHẤT trong
+     AlarmLog viết thành 1 node wiki (taskType='alarm-digest') — cùng định dạng
+     với digest 1 phút để chat AI đọc được qua liveFactoryState().alarmDigests. */
+  function writeTop10Digest() {
+    if (typeof AlarmLog === 'undefined' || typeof pushWikiNode !== 'function') return;
+    const all = AlarmLog.all();
+    if (!all.length) { emitSyslog('⚠ Chưa có alarm nào để tổng hợp vào wiki.'); return; }
+    const top = all.slice(-10);
+    const crit = top.filter(a => a.severity === 'CRITICAL');
+    const warn = top.filter(a => a.severity === 'WARNING');
+    const active = AlarmLog.active();
+    const from = top[0].ts;
+    const lines = [
+      `📚 Top ${top.length} alarm mới nhất (tổng hợp tay) · ${digestTime(from)} → ${digestTime(Date.now())}: ${crit.length} CRITICAL / ${warn.length} WARNING · đang ACTIVE: ${active.length}.`,
+    ];
+    top.forEach(a => lines.push(
+      `• ${digestTime(a.ts)} ${a.severity} ${a.device}:${a.signal} = ${a.value} (bt ${a.normal}, lệch ${a.pct}%) [${a.source}] → ${a.status === 'ACTIVE' ? 'đang ACTIVE' : 'phục hồi ' + digestTime(a.resolvedTs)}`));
+    if (active.length) lines.push('🔎 Cần kiểm tra ngay: ' + active.map(a => `${a.device}:${a.signal} (${a.severity})`).join(', '));
+    const id = 'alarm-top10-' + (++digestSeq) + '-' + new Date().toISOString().slice(11, 19).replace(/:/g, '');
+    pushWikiNode({
+      id, device: 'FACTORY', taskType: 'alarm-digest',
+      symptoms: Array.from(new Set(top.map(a => a.device + ':' + a.signal))),
+      occurrences: top.length,
+      content: lines.join('\n'),
+      window: { from, to: Date.now() },
+    });
+    renderRunbooks(); renderRunbookBoard();
+    traceRow('TRACE', 'Wiki', `🧾 Node wiki ${id}: tổng hợp ${top.length} alarm mới nhất từ Alarm Log.`);
+    emitSyslog(`📚 Tổng hợp ${top.length} alarm mới nhất → wiki (node ${id}).`);
+  }
+
   function computeCausal() {
     causalNodes = [];
     const pairs = [];
@@ -792,10 +866,23 @@
     out.causalEdges = causalNodes.map(e => `${e.from}→${e.to} (${e.weight.toFixed(2)})`);
     out.recentIncidents = recentIncidentsFor(q || '');
     out._winMs = questionWindowMs(q || '');
+    // node wiki "alarm-digest" (AlarmLog tóm tắt 1 phút/lần) trong khung thời gian câu hỏi
+    // → chat AI kêu "kiểm tra 5 phút vừa rồi" thì đọc được lịch sử alarm từng phút
+    out.alarmDigests = getRunbooks()
+      .filter(r => r.taskType === 'alarm-digest' && (!r.window || r.window.to >= Date.now() - out._winMs))
+      .slice(-8)
+      .map(r => ({
+        id: r.id,
+        from: r.window ? new Date(r.window.from).toISOString() : null,
+        to: r.window ? new Date(r.window.to).toISOString() : null,
+        alarms: r.occurrences,
+        content: r.content,
+      }));
     return out;
   }
   function symbolicAnswer(q, st) {
     const anom = Object.entries(st.deviceStatus).filter(([, v]) => v === 'ANOMALY').map(([d]) => d);
+    const dig = (st.alarmDigests || []).slice(-1)[0];
     return `[SYMBOLIC-ONLY] Trạng thái hiện tại: ${anom.length ? 'ANOMALY trên ' + anom.join(', ') : 'các thiết bị bình thường'}.
 ` +
       `Fault đang inject: ${st.activeFaults.join(', ') || 'không có'}.
@@ -803,7 +890,10 @@
       `Approval chờ người duyệt: ${st.pendingApprovals.length}. WO gần nhất: ${st.recentWorkOrders.join('; ') || 'chưa có'}.
 ` +
       `Runbook đã học: ${st.runbooks.join(', ') || 'wiki trống'}.
-(Bật Neuro-LLM ở chip topbar để có câu trả lời thông minh hơn.)`;
+` +
+      (dig ? `Wiki alarm-digest gần nhất (${dig.to || ''}): ${String(dig.content || '').split('\n')[0]}
+` : '') +
+      `(Bật Neuro-LLM ở chip topbar để có câu trả lời thông minh hơn.)`;
   }
   function appendChat(role, text) {
     const box = $('#chatBox');
@@ -815,24 +905,54 @@
     box.scrollTop = box.scrollHeight;
     return div;
   }
+  /* ------------- chat = agent harness: MỌI câu chat đều chạy pipeline đầy đủ (Orchestrator)
+     và câu trả lời trong chat là KẾT QUẢ pipeline, không phải LLM trả lời riêng ------------- */
+  function pipelineSummary(ctx) {
+    const lines = [`🤖 Pipeline ${ctx.taskId} · ${ctx.device} · ${ctx.taskType}${ctx.runbookHit ? ' · ⚡ runbook hit (tái sử dụng SOP)' : ' · full multi-agent'}`];
+    const obs = ctx.observations || [];
+    lines.push(obs.length ? `📡 IoT: bất thường ${obs.map(o => `${o.metric}=${o.value}`).join(', ')}` : `📡 IoT: ${ctx.device} các tín hiệu trong ngưỡng bình thường.`);
+    if (ctx.safety) lines.push(`🛡 Safety: ${ctx.safety.verdict} — ${ctx.safety.explain}`);
+    if (ctx.prodImpact) lines.push(`🏭 Production: ${ctx.prodImpact.note}`);
+    if (ctx.chosen) lines.push(`🧠 Planner (what-if twin): chọn "${ctx.chosen.action}" · score ${ctx.chosen.score.toFixed(2)}`);
+    if (ctx.workOrderContent) lines.push(`📋 Work order: "${ctx.workOrderContent}"${ctx.workOrderId ? ` → ${ctx.workOrderId}` : ''}`);
+    lines.push(ctx.verification && ctx.verification.ok ? '✅ Auditor: VERIFIED — read-back khớp, task hoàn tất.' : '⚠ Auditor: verification FAILED — cần kiểm tra lại.');
+    return lines.join('\n');
+  }
+  function symbolicTaskFromChat(q) {
+    const up = q.toUpperCase();
+    const dev = Object.keys(DEVICES).find(d => up.includes(d));
+    const s = q.toLowerCase();
+    const type = /xung đột|gas.*đơn|đơn gấp|đơn hàng/.test(s) ? 'conflict'
+      : /timeout|hết hạn|mất kết nối/.test(s) ? 'timeout'
+      : /kiểm tra|bảo trì|xử lý|sửa chữa|khắc phục|kế hoạch/.test(s) ? 'inspection' : 'generic';
+    return { device: dev || Object.keys(DEVICES)[0], taskType: type };
+  }
   async function chatSend() {
     const inp = $('#chatInput');
     const q = inp.value.trim();
     if (!q) return;
     inp.value = '';
     appendChat('user', q);
-    const st = liveFactoryState(q);
+    const holder = appendChat('ai', '🤖 Agent harness nhận yêu cầu — đang phân tích và chạy pipeline…');
+    // 1) parse câu chat → device + taskType (LLM trước, lỗi thì symbolic keyword)
+    let j = null;
     if (typeof LLM !== 'undefined' && LLM.available()) {
-      const holder = appendChat('ai', '🧠 Đang phân tích live state…');
-      try {
-        const a = await LLM.chatAssistant(q, st);
-        holder.textContent = a;
-      } catch (e) {
-        holder.textContent = '⚠ LLM lỗi (' + e.message + ') → fallback symbolic:\n' + symbolicAnswer(q, st);
-      }
-    } else {
-      appendChat('ai', symbolicAnswer(q, st));
+      try { j = await LLM.parseTask(q, Object.keys(DEVICES)); }
+      catch (e) { holder.textContent = '⚠ LLM parse lỗi (' + e.message + ') → fallback symbolic parser…'; }
     }
+    if (!j || !DEVICES[j.device]) j = symbolicTaskFromChat(q);
+    const type = (j.taskType === 'question') ? 'generic' : j.taskType;
+    // 2) chạy pipeline đầy đủ qua Orchestrator (agent harness) — cùng đường dẫn với ▶ RUN / S1-S3
+    let ctx = null;
+    try { ctx = await state.orch.run(j.device, type, q); } catch (e) { /* orch lỗi */ }
+    if (!ctx) {
+      holder.textContent = '⚠ Orchestrator đang bận xử lý task khác — pipeline chưa nhận câu này, gửi lại sau vài giây.';
+      return;
+    }
+    maybeLLMReport(ctx);   // RCA report + incident memory (giống ▶ RUN)
+    emitSyslog(`💬 Chat → pipeline ${ctx.taskId} (${j.device}/${type}) ${ctx.verification && ctx.verification.ok ? 'VERIFIED' : 'FAILED'}.`);
+    // 3) câu trả lời chat = chính kết quả pipeline
+    holder.textContent = pipelineSummary(ctx);
   }
 
   /* ------------- REALTIME mode: broker thật của BTC (MQTT-over-WSS) ------------- */
@@ -1087,11 +1207,31 @@
       renderAlarmLog();
       AlarmLog.onChange(() => renderAlarmsSoon());
     }
+
+    /* mỗi 1 phút: tóm tắt AlarmLog thành 1 node wiki (alarm-digest) cho chat AI tra cứu */
+    setInterval(writeAlarmDigest, DIGEST_MS);
     const clearAlarm = $('#alarmClearBtn');
     if (clearAlarm) clearAlarm.addEventListener('click', () => {
       if (typeof AlarmLog !== 'undefined') { AlarmLog.reset(); renderAlarmLog(); emitSyslog('🗑 Đã xóa toàn bộ alarm log.'); }
     });
     $('#alarmRefreshBtn').addEventListener('click', () => renderAlarmLog());
+    const alarmDigestBtn = $('#alarmDigestBtn');
+    if (alarmDigestBtn) alarmDigestBtn.addEventListener('click', () => { writeTop10Digest(); renderAlarmLog(); });
+
+    /* nút xoá cache: dọn sạch localStorage của app (alarm log, runbook wiki, incident memory, layout...)
+       rồi reload. GIỮ LẠI OpenRouter key để khỏi phải nhập lại. */
+    const clearCacheBtn = $('#clearCacheBtn');
+    if (clearCacheBtn) clearCacheBtn.addEventListener('click', () => {
+      if (!confirm('Xoá cache của app (alarm log, runbook wiki, incident memory, layout)?\nOpenRouter key sẽ được GIỮ LẠI. Trang sẽ reload sau khi xoá.')) return;
+      const removed = [];
+      try {
+        Object.keys(localStorage).forEach(k => {
+          if (k.startsWith('aiops')) { localStorage.removeItem(k); removed.push(k); }
+        });
+      } catch (e) { /* private mode */ }
+      emitSyslog('🗑 Đã xoá cache: ' + (removed.length ? removed.join(', ') : 'không có dữ liệu') + ' → reload...');
+      setTimeout(() => location.reload(), 350);
+    });
 
     /* nút ẩn/hiện cửa sổ syslog (góc dưới phải) */
     const sysToggle = $('#syslogToggle');

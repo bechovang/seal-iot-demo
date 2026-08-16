@@ -383,6 +383,7 @@ let RUNBOOKS = (() => {
           id: r.id, device: r.device, taskType: r.taskType || '',
           symptoms: r.symptoms || [], occurrences: +r.occurrences || 1,
           content: r.content || '', created: r.created || new Date().toISOString(),
+          window: r.window || null,
         }));
       }
     }
@@ -414,6 +415,30 @@ const distillRunbook = (entry) => {
     const r = RUNBOOKS.find(x => x.id === entry.id); r.occurrences++;
   }
   persistRunbooks();
+};
+
+/* Ghi một node tri thức bất kỳ vào wiki (upsert theo id). Dùng cho alarm digest
+   1 phút/lần: node có taskType='alarm-digest', window={from,to} để chat AI lọc
+   theo khung thời gian câu hỏi. Giữ tối đa 30 node digest (ring, bỏ cũ nhất). */
+const DIGEST_CAP = 30;
+const pushWikiNode = (node) => {
+  const i = RUNBOOKS.findIndex(r => r.id === node.id);
+  const full = {
+    id: node.id, device: node.device || 'FACTORY', taskType: node.taskType || 'note',
+    symptoms: node.symptoms || [], occurrences: node.occurrences || 1,
+    content: node.content || '', created: node.created || new Date().toISOString(),
+    window: node.window || null,
+  };
+  if (i >= 0) RUNBOOKS[i] = { ...RUNBOOKS[i], ...full };
+  else RUNBOOKS.push(full);
+  // ring-cap riêng cho digest để wiki không phình vô hạn (1 node/phút)
+  const digests = RUNBOOKS.filter(r => r.taskType === 'alarm-digest');
+  if (digests.length > DIGEST_CAP) {
+    const oldest = digests[0];
+    RUNBOOKS = RUNBOOKS.filter(r => r.id !== oldest.id);
+  }
+  persistRunbooks();
+  return full;
 };
 
 /* ---------- Lưu wiki ra FOLDER trên đĩa (File System Access API) ----------
@@ -512,6 +537,7 @@ async function restoreWikiFolder() {
 window.Orchestrator = Orchestrator;
 window.ToolLayer = ToolLayer;
 window.getRunbooks = () => RUNBOOKS;
+window.pushWikiNode = pushWikiNode;
 window.resetRunbooks = resetRunbooks;
 window.pickWikiFolder = pickWikiFolder;
 window.restoreWikiFolder = restoreWikiFolder;

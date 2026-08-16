@@ -25,6 +25,7 @@
     <span class="clock" id="clock">--:--:--</span>
   </div>
   <div class="power">
+    <button id="clearCacheBtn" class="btn ghost cyan" title="Xoá dữ liệu localStorage của app (alarm log, runbook wiki, incident memory, layout) rồi reload — giữ lại OpenRouter key">🗑 Xoá cache</button>
     <button id="panicBtn" class="btn danger ghost">⏻ EMERGENCY STOP</button>
   </div>
 </header>
@@ -78,7 +79,7 @@
       <div id="woList"></div>
     </div>
     <div class="block">
-      <h3>📚 Runbook wiki (learning) <button id="saveWikiBtn" class="btn small" title="Lưu wiki thành file .json vào 1 folder trên đĩa">💾 Lưu folder</button></h3>
+      <h3>📚 Runbook wiki (learning) <span class="tag cyan" title="Mỗi 1 phút, AlarmLog được tóm tắt thành 1 node wiki để chat AI tra cứu">alarm digest 1p</span> <button id="saveWikiBtn" class="btn small" title="Lưu wiki thành file .json vào 1 folder trên đĩa">💾 Lưu folder</button></h3>
       <div id="wikiFolderInfo" class="dim" style="font-size:10px;margin-bottom:5px"></div>
       <div id="runbookList"></div>
     </div>
@@ -92,7 +93,7 @@
     </div>
     <div class="block">
       <h3>💬 Operator Chat <span class="tag cyan">live state</span></h3>
-      <div id="chatBox" class="chat-box"><div class="chat-msg ai">Hỏi tôi về trạng thái nhà máy — vd: “Rủi ro lớn nhất hiện tại là gì?”</div></div>
+      <div id="chatBox" class="chat-box"><div class="chat-msg ai">Mọi câu chat đều được AGENT HARNESS xử lý qua pipeline đầy đủ (IoT → Safety → Planner → Action → Auditor) và trả lời bằng kết quả pipeline. Ví dụ: “kiểm tra MOTOR_01”, “xử lý xung đột gas GAS_01 vs đơn gấp”, “tình hình nhà máy thế nào”.</div></div>
       <div class="chat-input"><input id="chatInput" type="text" placeholder="Hỏi về nhà máy..." autocomplete="off"><button id="chatSend" class="btn primary">➤</button></div>
     </div>
   </section>
@@ -172,6 +173,7 @@
       <div class="alarm-toolbar">
         <div id="alarmStats"></div>
         <div>
+          <button id="alarmDigestBtn" class="btn small primary" title="Lấy 10 alarm mới nhất, tổng hợp thành 1 node wiki (alarm-digest) cho chat AI tra cứu">📚 Tổng hợp 10 → wiki</button>
           <button id="alarmRefreshBtn" class="btn small">↻ Refresh</button>
           <button id="alarmClearBtn" class="btn small danger">🗑 Clear log</button>
         </div>
