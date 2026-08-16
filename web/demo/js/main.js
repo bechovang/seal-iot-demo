@@ -974,6 +974,78 @@
     }));
   }
 
+  /* ------------- resizable layout: kéo giãn các panel ------------- */
+  function bindResizers() {
+    const layout = $('#layout');
+    if (!layout || !$('#gutterLeft')) return;
+    const KEY = 'aiops.layout.sizes.v1';
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+    // khôi phục kích thước đã lưu
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch { /* ignore */ }
+    if (saved.left) layout.style.setProperty('--col-left', saved.left + 'px');
+    if (saved.right) layout.style.setProperty('--col-right', saved.right + 'px');
+    if (saved.eng) layout.style.setProperty('--row-eng', saved.eng + 'px');
+
+    const persist = () => {
+      try {
+        const num = v => parseInt(getComputedStyle(layout).getPropertyValue(v), 10) || 0;
+        localStorage.setItem(KEY, JSON.stringify({
+          left: num('--col-left'), right: num('--col-right'), eng: num('--row-eng'),
+        }));
+      } catch { /* ignore */ }
+    };
+
+    function makeDrag(el, axis, apply) {
+      el.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+        el.classList.add('dragging');
+        document.body.classList.add(axis === 'x' ? 'resizing-x' : 'resizing-y');
+        const startPos = axis === 'x' ? e.clientX : e.clientY;
+        const base = apply.read();
+        const onMove = ev => {
+          const d = (axis === 'x' ? ev.clientX : ev.clientY) - startPos;
+          apply.write(clamp(base + d * apply.sign, apply.min, apply.max()));
+        };
+        const onUp = () => {
+          el.classList.remove('dragging');
+          document.body.classList.remove('resizing-x', 'resizing-y');
+          el.removeEventListener('pointermove', onMove);
+          el.removeEventListener('pointerup', onUp);
+          el.removeEventListener('pointercancel', onUp);
+          persist();
+        };
+        el.addEventListener('pointermove', onMove);
+        el.addEventListener('pointerup', onUp);
+        el.addEventListener('pointercancel', onUp);
+      });
+      el.addEventListener('dblclick', () => { apply.reset(); persist(); });
+    }
+
+    const maxCol = () => Math.max(320, window.innerWidth * 0.4);
+
+    makeDrag($('#gutterLeft'), 'x', {
+      sign: 1, min: 220, max: maxCol,
+      read: () => $('#telemetry').getBoundingClientRect().width,
+      write: px => layout.style.setProperty('--col-left', px + 'px'),
+      reset: () => layout.style.setProperty('--col-left', '300px'),
+    });
+    makeDrag($('#gutterRight'), 'x', {
+      sign: -1, min: 220, max: maxCol,
+      read: () => $('#ops').getBoundingClientRect().width,
+      write: px => layout.style.setProperty('--col-right', px + 'px'),
+      reset: () => layout.style.setProperty('--col-right', '300px'),
+    });
+    makeDrag($('#gutterBottom'), 'y', {
+      sign: -1, min: 150, max: () => Math.max(240, window.innerHeight * 0.8),
+      read: () => $('#eng').getBoundingClientRect().height,
+      write: px => layout.style.setProperty('--row-eng', px + 'px'),
+      reset: () => layout.style.setProperty('--row-eng', '320px'),
+    });
+  }
+
   /* ------------- boot ------------- */
   window.addEventListener('DOMContentLoaded', () => {
     initViewers();
@@ -1121,6 +1193,7 @@
     }, 1200);
 
     bindTabs();
+    bindResizers();
     renderKpi(); renderWO(); renderRunbooks();
     renderFleetStats(); renderAgentBoard(); renderRunbookBoard(); renderRunbookLog();
     renderIncidentHistory();
