@@ -149,39 +149,41 @@
       if (kh[0].length > 70) { kh[0].shift(); kh[1].shift(); }
       kh[0].push(state.broker.tickCount); kh[1].push(kal.x);
       causalTracker.push(key, normVal(d, m, v));
-      detectAlarm(d, m, v);   // per-signal ngưỡng -> alarm log
+      detectAlarm(d, m, v, drifted);   // per-signal ngưỡng + ADWIN drift -> alarm log
     });
     updateDriftViewer();
     updateKalmanViewer();
   }
 
-  /* ------------- Alarm log: vượt ngưỡng -> báo động (persist localStorage) ------------- */
+  /* ------------- Alarm log: vượt ngưỡng / ADWIN drift -> báo động (persist localStorage) ------------- */
   const alarmState = {};   // key(dev.signal) -> { sev, last }
-  function detectAlarm(d, m, v) {
+  function detectAlarm(d, m, v, drift) {
     if (typeof AlarmLog === 'undefined') return;
     const sim = state.broker && state.broker.sims[d];
     const base = sim && sim.norm ? sim.norm[m] : null;
-    if (base == null || base === 0) return;
-    const dev = Math.abs(v - base) / (base || 1);
+    const dev = base ? Math.abs(v - base) / (base || 1) : 0;
     let sev = null;
-    if (dev > 0.5) sev = 'CRITICAL';
-    else if (dev > 0.25) sev = 'WARNING';
+    let why = 'anomaly';
+    if (dev > 0.5) { sev = 'CRITICAL'; why = 'vượt ngưỡng CRITICAL'; }
+    else if (dev > 0.25) { sev = 'WARNING'; why = 'vượt ngưỡng WARNING'; }
+    else if (drift) { sev = 'WARNING'; why = 'ADWIN drift'; }   // distribution-change anomaly
     const key = d + '.' + m;
     const st = alarmState[key] || (alarmState[key] = { sev: null, last: 0 });
     const now = Date.now();
     if (sev) {
-      if (st.sev && st.sev !== sev) AlarmLog.resolve(d, m);   // tăng cấp: đóng mức cũ
-      if (st.sev !== sev) {
-        AlarmLog.record({
-          device: d, signal: m, value: +v.toFixed(2), normal: base,
-          pct: Math.round(dev * 100), severity: sev,
-          source: live.mode === 'LIVE' ? 'live' : 'sim',
-        });
-        st.sev = sev; st.last = now;
-        const lbl = live.mode === 'LIVE' ? 'LIVE' : 'SIM';
-        traceRow('TRACE', 'AlarmLog', `🚨 ${sev} ${d}:${m} vượt ngưỡng ${pctStr(dev)} (${base} → ${v.toFixed(1)}) · ${lbl}`);
-        renderAlarmsSoon();
-      }
+      // tăng cấp: đóng alarm mức cũ rồi ghi mức mới
+      if (st.sev && st.sev !== sev) AlarmLog.resolve(d, m);
+      // tránh lặp lại cùng mức alarm trong 3s (cooldown) khi kèm nhiều chu kỳ drift
+      if (st.sev === sev && now - st.last < 3000) return;
+      AlarmLog.record({
+        device: d, signal: m, value: +v.toFixed(2), normal: base,
+        pct: base ? Math.round(dev * 100) : 0, severity: sev,
+        source: live.mode === 'LIVE' ? 'live' : 'sim',
+      });
+      st.sev = sev; st.last = now;
+      const lbl = live.mode === 'LIVE' ? 'LIVE' : 'SIM';
+      traceRow('TRACE', 'AlarmLog', `🚨 ${sev} ${d}:${m} (${why}) · ${lbl}`);
+      renderAlarmsSoon();
     } else if (st.sev) {
       AlarmLog.resolve(d, m);
       traceRow('TRACE', 'AlarmLog', `✅ Phục hồi ${d}:${m} — trở về trong ngưỡng, alarm RESOLVED.`);
@@ -365,6 +367,30 @@
         const wlink = n.windowId ? `<span class="dim">${n.windowId.replace('w-','W')}</span>` : '<span class="dim">–</span>';
         return `<div class="ih-row"><span>${new Date(n.ts).toLocaleTimeString('en-GB')}</span>${wlink}<span>${n.device || '?'}</span>${sev}<span class="pb">${doc}</span></div>`;
       }).join('');
+  }
+
+  /* Runbook wiki → lưu thành file .json vào 1 folder trên đĩa (File System Access). */
+  function wireWikiFolder() {
+    const info = $('#wikiFolderInfo');
+    const setInfo = (txt, ok) => { if (info) { info.textContent = txt; info.style.color = ok ? 'var(--green)' : 'var(--dim)'; } };
+    const btn = $('#saveWikiBtn');
+    if (btn) btn.addEventListener('click', async () => {
+      try {
+        const n = await pickWikiFolder();
+        setInfo(`✅ Đã lưu ${n} runbook + _index.json vào folder đã chọn. Từ giờ distill sẽ tự ghi lại.`, true);
+        emitSyslog(`💾 Runbook wiki đã lưu ra folder (${n} file).`);
+        traceRow('VERIFY', 'Wiki', `Lưu ${n} runbook thành file .json vào folder trên đĩa.`);
+      } catch (e) {
+        setInfo('⚠ ' + e.message, false);
+      }
+    });
+    // boot: thử khôi phục folder đã chọn trước đó (không popup, chỉ đọc handle đã cache)
+    if (typeof restoreWikiFolder === 'function') {
+      restoreWikiFolder().then(h => {
+        if (h) setInfo('📂 Wiki đang đồng bộ ra folder đã chọn (tự ghi khi distill).', true);
+        else setInfo('Bấm “💾 Lưu folder” để chọn nơi lưu wiki thành file .json.', false);
+      }).catch(() => {});
+    }
   }
 
   /* ------------- Agent Fleet tab: live orchestration showcase ------------- */
@@ -970,6 +996,20 @@
     setInterval(() => computeCausal(), 1200);
     setInterval(() => updateAnomalyKpi(), 3000);
 
+    /* Alarm scanner định kỳ: đọc trực tiếp sim.values (cùng nguồn với device card),
+       để alarm ghi được cả khi sự kiện telemetry chưa chạm tới onTelemetry (đặc biệt REALTIME/live). */
+    setInterval(() => {
+      if (!state.broker) return;
+      Object.keys(DEVICES).forEach(d => {
+        const sim = state.broker.sims[d];
+        if (!sim || !sim.values) return;
+        DEVICES[d].metrics.forEach(m => {
+          const v = sim.values[m];
+          if (v != null) detectAlarm(d, m, v);
+        });
+      });
+    }, 500);
+
     /* alarm log: render lúc boot + khi store đổi + các nút điều khiển */
     if (typeof AlarmLog !== 'undefined') {
       renderAlarmLog();
@@ -980,6 +1020,14 @@
       if (typeof AlarmLog !== 'undefined') { AlarmLog.reset(); renderAlarmLog(); emitSyslog('🗑 Đã xóa toàn bộ alarm log.'); }
     });
     $('#alarmRefreshBtn').addEventListener('click', () => renderAlarmLog());
+
+    /* nút ẩn/hiện cửa sổ syslog (góc dưới phải) */
+    const sysToggle = $('#syslogToggle');
+    const sysOv = $('#syslog-overlay');
+    if (sysToggle && sysOv) sysToggle.addEventListener('click', () => {
+      sysOv.classList.toggle('collapsed');
+      sysToggle.textContent = sysOv.classList.contains('collapsed') ? '+' : '–';
+    });
     setInterval(() => { if (fleetViewVisible()) renderAgentBoard(); }, 700); // fade live LEDs
 
     // wire task launcher
@@ -1013,6 +1061,9 @@
       runTask(d, t);
     }));
     $('#panicBtn').addEventListener('click', () => { clearFaults(); emitSyslog('⏻ E-STOP: all faults cleared, requesting maintenance'); state.tools.createIncident({ device: 'LINE_01', summary: 'Emergency stop invoked by operator', severity: 'HIGH' }); updateUiFromTools(); });
+
+    // Runbook wiki → lưu ra FOLDER trên đĩa (File System Access API)
+    wireWikiFolder();
 
     // Neuro-LLM chip: click để dán / đổi OpenRouter key
     const llmChip = $('#llmChip');    if (llmChip) llmChip.addEventListener('click', () => {

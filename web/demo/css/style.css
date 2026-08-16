@@ -123,7 +123,11 @@ table.dt th{color:var(--dim);font-size:10px}
 .winner{background:rgba(52,211,153,.12)}
 
 #syslog-overlay{position:fixed;bottom:10px;right:10px;width:340px;z-index:50}
-#syslog{background:rgba(5,8,14,.95);border:1px solid var(--cyan);border-radius:8px;padding:10px;font-size:11px;max-height:220px;overflow:auto}
+.syslog-head{display:flex;align-items:center;justify-content:space-between;gap:6px;background:rgba(5,8,14,.95);border:1px solid var(--cyan);border-bottom:none;border-radius:8px 8px 0 0;padding:4px 8px;font-size:9px;letter-spacing:1px;color:var(--cyan)}
+.syslog-btn{background:transparent;border:1px solid var(--cyan);color:var(--cyan);width:18px;height:18px;line-height:1;border-radius:4px;cursor:pointer;font-size:12px;padding:0}
+.syslog-btn:hover{background:var(--cyan);color:#04222b}
+#syslog-overlay.collapsed #syslog{display:none}
+#syslog{background:rgba(5,8,14,.95);border:1px solid var(--cyan);border-radius:0 0 8px 8px;padding:10px;font-size:11px;max-height:220px;overflow:auto}
 #syslog div{border-bottom:1px solid #14203a;padding:2px 0}
 
 ::-webkit-scrollbar{width:8px;height:8px}

@@ -392,6 +392,9 @@ let RUNBOOKS = (() => {
 const persistRunbooks = () => {
   try { localStorage.setItem(RUNBOOKS_KEY, JSON.stringify(RUNBOOKS)); }
   catch (e) { /* quota/denied → bỏ qua, chỉ mất persist */ }
+  // best-effort: nếu đã chọn folder wiki thì đồng bộ file ra đĩa (không chặn UI)
+  try { if (typeof flushWikiToFolder === 'function' && _wikiDir) flushWikiToFolder(_wikiDir).catch(() => {}); }
+  catch (e) { /* ignore */ }
 };
 // Nút reset tri thức (dùng trong demo): trả wiki về seed ban đầu.
 const resetRunbooks = () => {
@@ -413,7 +416,103 @@ const distillRunbook = (entry) => {
   persistRunbooks();
 };
 
+/* ---------- Lưu wiki ra FOLDER trên đĩa (File System Access API) ----------
+   Cho phép dashboard tĩnh ghi từng runbook thành file .json vào 1 folder do người
+   dùng chọn (vd C:\...\demo seal\wiki). Handle folder được cache trong IndexedDB
+   để các lần distill sau tự ghi lại mà không cần chọn lại folder. */
+const WIKI_DB = 'aiops-wiki', WIKI_STORE = 'handles';
+let _wikiDir = null; // FileSystemDirectoryHandle đang active
+
+function _idb() {
+  return new Promise((res, rej) => {
+    if (typeof indexedDB === 'undefined') return rej(new Error('no idb'));
+    const rq = indexedDB.open(WIKI_DB, 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore(WIKI_STORE);
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function _storeHandle(h) {
+  try {
+    const db = await _idb();
+    const tx = db.transaction(WIKI_STORE, 'readwrite');
+    tx.objectStore(WIKI_STORE).put(h, 'wikiDir');
+  } catch (e) { /* private mode / denied */ }
+}
+async function _loadHandle() {
+  try {
+    const db = await _idb();
+    return await new Promise((res, rej) => {
+      const tx = db.transaction(WIKI_STORE, 'readonly');
+      const rq = tx.objectStore(WIKI_STORE).get('wikiDir');
+      rq.onsuccess = () => res(rq.result || null);
+      rq.onerror = () => rej(rq.error);
+    });
+  } catch (e) { return null; }
+}
+
+async function _writeFile(dir, name, text) {
+  const fh = await dir.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(text);
+  await w.close();
+}
+
+/* Ghi toàn bộ wiki ra folder: mỗi runbook 1 file rb-<id>.json + _index.json tổng hợp. */
+async function flushWikiToFolder(dir) {
+  const d = dir || _wikiDir;
+  if (!d) return 0;
+  let n = 0;
+  for (const r of RUNBOOKS) {
+    const name = 'rb-' + String(r.id).toLowerCase().replace(/[^a-z0-9-_]+/g, '-') + '.json';
+    await _writeFile(d, name, JSON.stringify({ ...r, source: 'distilled', savedAt: new Date().toISOString() }, null, 2));
+    n++;
+  }
+  await _writeFile(d, '_index.json', JSON.stringify({
+    count: RUNBOOKS.length, savedAt: new Date().toISOString(),
+    runbooks: RUNBOOKS.map(r => ({ id: r.id, device: r.device, occurrences: r.occurrences })),
+  }, null, 2));
+  return n;
+}
+
+/* Chọn folder (user gesture) rồi cache handle; trả về số file đã ghi. */
+async function pickWikiFolder() {
+  if (typeof showDirectoryPicker !== 'function') {
+    throw new Error('Trình duyệt không hỗ trợ File System Access (dùng Chrome/Edge).');
+  }
+  const dir = await showDirectoryPicker({ mode: 'readwrite' });
+  // xin quyền ghi (một số trình duyệt cần verify)
+  if (dir.requestPermission) {
+    const p = await dir.requestPermission({ mode: 'readwrite' });
+    if (p !== 'granted') throw new Error('Quyền ghi folder bị từ chối.');
+  }
+  _wikiDir = dir;
+  await _storeHandle(dir);
+  return flushWikiToFolder(dir);
+}
+
+/* Tự động khôi phục folder đã chọn trước đó (gọi lúc boot, không cần click). */
+async function restoreWikiFolder() {
+  try {
+    const h = await _loadHandle();
+    if (!h) return null;
+    if (h.queryPermission) {
+      let p = await h.queryPermission({ mode: 'readwrite' });
+      if (p !== 'granted' && h.requestPermission) {
+        // không tự popup được ngoài user gesture → để nút bấm kích hoạt
+        _wikiDir = h; return h;
+      }
+    }
+    _wikiDir = h;
+    await flushWikiToFolder(h); // đồng bộ wiki hiện tại ra folder
+    return h;
+  } catch (e) { return null; }
+}
+
 window.Orchestrator = Orchestrator;
 window.ToolLayer = ToolLayer;
 window.getRunbooks = () => RUNBOOKS;
 window.resetRunbooks = resetRunbooks;
+window.pickWikiFolder = pickWikiFolder;
+window.restoreWikiFolder = restoreWikiFolder;
+window.flushWikiToFolder = flushWikiToFolder;

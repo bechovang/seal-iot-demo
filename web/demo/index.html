@@ -78,7 +78,8 @@
       <div id="woList"></div>
     </div>
     <div class="block">
-      <h3>📚 Runbook wiki (learning)</h3>
+      <h3>📚 Runbook wiki (learning) <button id="saveWikiBtn" class="btn small" title="Lưu wiki thành file .json vào 1 folder trên đĩa">💾 Lưu folder</button></h3>
+      <div id="wikiFolderInfo" class="dim" style="font-size:10px;margin-bottom:5px"></div>
       <div id="runbookList"></div>
     </div>
     <div class="block">
@@ -179,7 +180,7 @@
   </section>
 </main>
 
-<div id="syslog-overlay"><div id="syslog"></div></div>
+<div id="syslog-overlay"><div class="syslog-head"><span>SYSTEM LOG</span><button id="syslogToggle" title="Ẩn/hiện log" class="syslog-btn">–</button></div><div id="syslog"></div></div>
 
 <script src="js/config.js"></script>
 <script src="js/algorithms.js"></script>
