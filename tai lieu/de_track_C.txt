@@ -1,0 +1,121 @@
+TRACK C: SMART FACTORY
+Multi-Agent Industrial Operations & Maintenance Coordination
+1. Bối cảnh Domain
+Một dây chuyền sản xuất sử dụng động cơ, băng chuyền, đường dây điện và nhiều cảm biến để duy trì hoạt động liên tục.
+Hoạt động nhà máy đòi hỏi sự phối hợp giữa bảo trì, sản xuất, an toàn, vật tư và quản lý ca. Dữ liệu IoT là một nguồn quan sát hỗ trợ các vai trò này ra quyết định.
+Đội thi xây dựng một sản phẩm Multi-Agent AI có khả năng:
+Quan sát trạng thái dây chuyền qua MQTT.
+Phối hợp nhiều Agent để chuẩn bị kế hoạch, xử lý công việc hoặc hỗ trợ quyết định.
+Tạo work order, incident, yêu cầu phê duyệt, thông báo hoặc báo cáo qua Tool/API.
+Kiểm tra kết quả và hiển thị audit trace.
+2. Persona mục tiêu
+Persona chính - Kỹ sư bảo trì
+Cần dữ liệu và bằng chứng kỹ thuật.
+Cần tạo và theo dõi công việc bảo trì.
+Cần biết thiết bị, tài liệu và nguồn lực liên quan.
+Persona phụ - Quản lý ca sản xuất
+Cần cân bằng vận hành, an toàn và kế hoạch sản xuất.
+Cần phê duyệt các hành động quan trọng.
+Cần thông tin cô đọng, có tiến độ và trách nhiệm rõ ràng.
+3. Thiết bị và dữ liệu
+Device code
+Thiết bị
+Metric
+Đơn vị
+MOTOR_01
+Động cơ băng chuyền 1
+current, vibration, temperature
+A, mm/s, °C
+LINE_01
+Đường dây chính
+voltage, current
+V, A
+CONVEYOR_01
+Băng chuyền 1
+speed, load
+m/s, kg
+PRESS_01
+Cảm biến áp suất lò
+pressure
+bar
+GAS_01
+Cảm biến khí xưởng
+gas
+ppm
+PROBE_01
+Đầu dò nhiệt lò
+temperature
+°C
+
+4. Bài toán cần giải quyết
+Xây dựng một hệ thống Multi-Agent AI hỗ trợ điều hành và vận hành Smart Factory. Sản phẩm có thể tập trung vào bảo trì, quản lý sự cố, phối hợp sản xuất, quản lý vật tư, an toàn hoặc bàn giao ca. Không bắt buộc phải dự báo lỗi hoặc tính health score.
+Sản phẩm phải thể hiện được chu trình:
+Nhận yêu cầu → Đọc dữ liệu IoT → Phân công Agent → Phối hợp → Tool/API → Verification → Báo cáo
+
+5. Cấu trúc Agent gợi ý
+Operations Supervisor Agent - Nhận yêu cầu, chia việc, xử lý mâu thuẫn và tổng hợp kết quả.
+IoT Observation Agent - Đọc và tóm tắt dữ liệu thiết bị từ MQTT.
+Maintenance Agent - Chuẩn bị kế hoạch kiểm tra, work order và lịch sử bảo trì mô phỏng.
+Production or Safety Agent - Đánh giá ảnh hưởng đến sản xuất hoặc an toàn.
+Factory Action Agent - Tạo work order, incident, thông báo, yêu cầu phê duyệt hoặc báo cáo qua Tool/API.
+Đội thi được tự do thay đổi tên, số lượng và kiến trúc Agent, miễn đáp ứng yêu cầu tối thiểu chung và chứng minh mỗi Agent có vai trò thực sự cần thiết.
+6. Kịch bản tác vụ đơn giản
+Kịch bản 1 - Chuẩn bị kiểm tra thiết bị
+Yêu cầu: “Hãy chuẩn bị kế hoạch kiểm tra MOTOR_01 trước ca sản xuất tiếp theo.”
+Cách xử lý gợi ý:
+1. Supervisor giao IoT Agent đọc MOTOR_01 và các thiết bị liên quan.
+2. Maintenance Agent đề xuất nội dung kiểm tra.
+3. Production Agent xem xét ảnh hưởng đến ca sản xuất.
+4. Supervisor tổng hợp kế hoạch và xin phê duyệt nếu có thay đổi quan trọng.
+5. Action Agent tạo work order.
+6. Action Agent đọc lại work order để xác nhận đúng thiết bị, nội dung và trạng thái.
+BTC quan sát:
+Dữ liệu MQTT có ảnh hưởng đến kế hoạch hoặc ưu tiên hay không.
+Có phối hợp ít nhất 02 Agent hay không.
+Work order có được tạo và verification hay không.
+Kịch bản 2 - Xung đột giữa sản xuất và an toàn
+Yêu cầu: “Dữ liệu GAS_01 đang thay đổi trong khi có đơn hàng gấp. Hãy đánh giá và đề xuất phương án vận hành.”
+Cách xử lý gợi ý:
+1. IoT Agent tóm tắt dữ liệu GAS_01 và độ mới của dữ liệu.
+2. Safety Agent phân tích khía cạnh an toàn.
+3. Production Agent phân tích ảnh hưởng đến đơn hàng.
+4. Supervisor nêu các phương án và điểm mâu thuẫn.
+5. Hệ thống yêu cầu quản lý phê duyệt hành động quan trọng.
+6. Reporting hoặc Action Agent tạo báo cáo quyết định và kiểm tra trạng thái.
+BTC quan sát:
+Không chấm đúng một ngưỡng gas cụ thể.
+Chấm cách các Agent sử dụng dữ liệu, xử lý mâu thuẫn và kiểm soát hành động.
+Kịch bản 3 - Tool timeout hoặc dữ liệu không còn mới
+Yêu cầu: “Hãy tạo công việc kiểm tra LINE_01 và xử lý an toàn nếu dữ liệu hoặc Tool không phản hồi như mong đợi.”
+Cách xử lý gợi ý:
+1. IoT Agent kiểm tra dữ liệu LINE_01 và timestamp.
+2. Maintenance Agent chuẩn bị nội dung work order.
+3. Action Agent gọi Tool tạo work order.
+4. Nếu Tool timeout, Agent kiểm tra danh sách work order trước khi retry.
+5. Hệ thống tránh tạo trùng và ghi rõ trạng thái partial/failed nếu không thể hoàn thành.
+BTC quan sát:
+Có verification và idempotency hay không.
+Không bịa dữ liệu hoặc kết quả Tool.
+Có khả năng re-plan khi một thành phần không khả dụng.
+7. Yêu cầu UX
+Giao diện phù hợp màn hình giám sát tại phòng điều hành.
+Hiển thị trạng thái MQTT, thiết bị và dữ liệu được sử dụng.
+Hiển thị Agent, handoff, Tool và kết quả verification.
+Ưu tiên thông tin theo tác vụ thay vì hiển thị mọi metric ngang nhau.
+Có khu vực phê duyệt hành động quan trọng.
+Không lag/giật khi dữ liệu cập nhật liên tục.
+8. User stories
+Là kỹ sư bảo trì, tôi muốn AI phối hợp để tạo work order có đầy đủ bối cảnh.
+Là quản lý ca, tôi muốn xem các phương án khi sản xuất và an toàn xung đột.
+Là kỹ sư, tôi muốn biết dữ liệu IoT nào đã ảnh hưởng đến kế hoạch.
+Là quản lý, tôi muốn phê duyệt trước hành động quan trọng.
+Là người vận hành, tôi muốn biết Agent đã kiểm tra kết quả sau hành động hay chưa.
+9. Điều kiện chấp nhận theo Track
+Nhận và hiển thị hoặc truy xuất dữ liệu tối thiểu 04/06 thiết bị.
+Có tối thiểu 03 Agent và một tác vụ cần ít nhất 02 Agent phối hợp.
+Có ít nhất một quyết định hoặc kế hoạch sử dụng dữ liệu MQTT.
+Có Tool/API tạo work order, incident, thông báo, yêu cầu phê duyệt hoặc báo cáo.
+Có verification và tránh tạo trùng khi retry.
+Dashboard rõ ràng khi nhiều metric cập nhật đồng thời.
+
+

@@ -1,0 +1,156 @@
+THÔNG TIN VỀ CUỘC THI
+SEAL HACKATHON HỌC KỲ SUMMER 2026
+1. SEAL HACKATHON là cuộc thi học thuật và trải nghiệm công nghệ dành cho
+các sinh viên ngành Công nghệ thông tin từ Trường Đại học FPT tại TP.HCM và các
+trường Đại học khác trong địa bàn thành phố Hồ Chí Minh.
+2. Hệ thống Hackathon:
+Mỗi năm SEAL tổ chức 03 Hackathon, tương ứng với 3 học kỳ: Spring, Summer, Fall:
+- Emerging Technologies: Tập trung vào các công nghệ mới và xu hướng
+tiên tiến như AI, IoT, Blockchain, cùng các lĩnh vực nghiên cứu đột phá trong ngành
+công nghệ.
+- Product & User Experience: Tập trung vào việc phát triển sản phẩm hướng
+đến người dùng, tối ưu trải nghiệm thực tế và thúc đẩy thương mại hóa các ý tưởng
+sáng tạo.
+- SDLC & Professional Working: Tập trung vào các chủ đề liên quan đến
+vòng đời phát triển phần mềm (SDLC) và kỹ năng làm việc chuyên nghiệp, giúp sinh
+viên phát triển khả năng làm việc trong môi trường công nghiệp thực tế.
+3. Bảng xếp hạng:
+Bảng xếp hạng trong cuộc thi SEAL Hackathon sẽ được tổng hợp và công bố theo ba
+hình thức dưới đây:
+- Bảng xếp hạng Chapter: Đây là bảng xếp hạng tính điểm của các Team
+thuộc từng Chapter trong suốt cả năm, điểm số sẽ được cộng hoặc trừ dựa trên
+thành tích cao nhất của các Team, theo quy định của từng Chapter.
+- Bảng xếp hạng Team: Áp dụng cho từng Hackathon, bảng này phản ánh kết
+quả thi đấu của các Team trong kỳ thi đó, không cộng dồn điểm từ các Hackathon
+khác.
+- Bảng xếp hạng cá nhân: Tính điểm dựa trên kết quả của Team mà cá nhân
+tham gia trong mỗi Hackathon, điểm sẽ được ghi nhận và cộng dồn trong suốt năm
+để xét giải thưởng cá nhân.
+I. GIỚI THIỆU SEAL HACKATHON SUMMER 2026
+- Trong bối cảnh các thiết bị IoT ngày càng được ứng dụng rộng rãi trong đời
+sống và sản xuất, thách thức đặt ra không còn chỉ là khả năng thu thập dữ liệu, mà còn
+nằm ở việc phân tích, trực quan hóa và chuyển đổi luồng dữ liệu thời gian thực thành
+những thông tin có giá trị. Một hệ thống thông minh cần có khả năng nhận biết trạng
+thái vận hành, phát hiện sớm các dấu hiệu bất thường và hỗ trợ người dùng đưa ra
+quyết định phù hợp trước khi sự cố gây ra ảnh hưởng nghiêm trọng.
+- SEAL Hackathon Summer 2026 được tổ chức với mục tiêu khuyến khích sinh
+viên xây dựng các sản phẩm ứng dụng IoT và trí tuệ nhân tạo nhằm giải quyết những
+bài toán vận hành trong thực tế. Với chủ đề “AI-Driven Smart Operations: Turning
+Real-Time IoT Data into Intelligent Actions”, các đội thi sẽ tiếp nhận và xử lý dữ liệu
+cảm biến theo thời gian thực, từ đó phát triển giải pháp giám sát, cảnh báo, chẩn đoán
+sự cố và đề xuất hành động phù hợp trong các lĩnh vực cụ thể.
+II. LỊCH TRÌNH SEAL HACKATHON SUMMER 2026
+- --/--/2026 - --/--/2026: Đăng ký tham gia (Hoặc đóng đơn sớm khi đủ đội thi)
+- --/--: Workshop “AI-Driven Smart Operations: From Real-Time IoT Data to
+Intelligent Decisions”. Workshop cung cấp kiến thức nền tảng về thu thập và xử lý dữ
+liệu IoT theo thời gian thực, ứng dụng trí tuệ nhân tạo trong phát hiện bất thường, dự
+đoán rủi ro, phân tích nguyên nhân sự cố và đề xuất hành động phù hợp cho người
+vận hành.
+- --/--: Khai mạc cuộc thi – Bốc thăm Track – Công bố chủ đề – Phổ biến thể lệ
+và hướng dẫn kỹ thuật.
+- --/--: Thi đấu chính thức – Xây dựng mô hình AI và hoàn thiện sản phẩm –
+Thuyết trình vòng Sơ loại – Vòng Chung kết – Trao giải và Bế mạc.
+III. CƠ CẤU CUỘC THI SEAL HACKATHON SUMMER 2026
+- Chủ đề: “AI-Driven Smart Operations: Turning Real-Time IoT Data into
+Intelligent Actions”
+Các đội thi sẽ xây dựng sản phẩm ứng dụng AI để tiếp nhận và phân tích dữ liệu IoT
+theo thời gian thực, phát hiện bất thường, dự đoán rủi ro và đề xuất phương án xử lý
+phù hợp.
+Điều 1. Chủ đề và phạm vi thi đấu
+Cuộc thi gồm 03 Track thuộc các lĩnh vực vận hành thông minh khác nhau. Chủ đề
+cụ thể của từng Track được Ban Tổ chức bảo mật và chỉ công bố thông qua hình thức
+bốc thăm trong buổi gặp mặt trước ngày thi đấu.
+Mỗi đội sẽ phát triển một sản phẩm AI dựa trên dữ liệu cảm biến và hệ thống thiết bị
+do Ban Tổ chức cung cấp. Giải pháp cần thể hiện rõ vai trò của AI trong ít nhất một
+nhiệm vụ như phát hiện bất thường, dự báo, chẩn đoán nguyên nhân hoặc đề xuất hành
+động.
+Điều 2. Cấu trúc và lịch trình cuộc thi
+Ngày 1: Khai mạc và chuẩn bị thi đấu
+14h00 – 17h00: Khai mạc, phổ biến thể lệ, bốc thăm Track, công bố chủ đề và chia
+bảng thi đấu.
+● Các đội lần lượt bốc thăm một trong ba Track.
+● Ban Tổ chức công bố 01 chủ đề tương ứng cho mỗi Track.
+● Các đội được chia bảng tùy theo số lượng đăng ký thực tế và được bố trí vị trí thi
+đấu.
+● Mỗi đội được cấp repository, tài khoản và thông tin kết nối với hệ thống mô
+phỏng.
+● Các đội tiến hành kiểm tra internet, API, MQTT và môi trường phát triển.
+● Thành viên phải có mặt đầy đủ trong Ngày 1 để tham gia bốc thăm và tiếp nhận
+thông tin thi đấu.
+Ngày 2: Thi đấu và bế mạc
+● 07h00 – 14h00: Thi đấu chính thức, xây dựng và hoàn thiện sản phẩm.
+● 14h00 – 15h30: Trình bày và chấm điểm vòng bảng.
+● 15h30 – 17h00: Vòng chung kết.
+● 17h00 – 18h00: Trao giải và bế mạc.
+Điều 3. Quy định thi đấu
+- Thời gian thi đấu chính thức: 07h00 – 14h00.
+- Đội hoặc thành viên đến trễ quá 60 phút sẽ không được tham gia, trừ trường
+hợp đặc biệt được Ban Tổ chức chấp thuận.
+- Mã nguồn phải được lưu trữ trên GitHub, GitLab hoặc nền tảng tương đương; tài
+liệu có thể quản lý bằng Jira, Confluence hoặc Notion.
+- Các đội trình bày bằng slide và demo trực tiếp sản phẩm.
+- Các đội được phép sử dụng các mô hình, thư viện và nền tảng AI phù hợp như
+TensorFlow, PyTorch, scikit-learn, Hugging Face, OpenAI SDK, Google Gemini
+SDK, LangGraph hoặc công cụ tương đương.
+- Giải pháp phải thể hiện rõ vai trò của AI trong phân tích dữ liệu, phát hiện bất
+thường, dự báo, chẩn đoán hoặc đề xuất hành động.
+- Sản phẩm chỉ trực quan hóa dữ liệu hoặc cảnh báo bằng điều kiện cố định sẽ
+không được xem là đáp ứng đầy đủ yêu cầu về AI.
+- Vòng bảng: 5 phút trình bày, 3 phút trả lời câu hỏi.
+- Vòng chung kết: 7 phút trình bày, 3 phút trả lời câu hỏi.
+Điều 4. Cơ cấu thi đấu và chia bảng
+- Cuộc thi gồm 03 Track, tương ứng với 03 lĩnh vực chuyên môn khác nhau.
+- Mỗi Track được tổ chức thành một bảng thi đấu, tối đa 08 đội mỗi bảng.
+- Các đội được phân vào Track bằng hình thức bốc thăm.
+- Ban Tổ chức bảo đảm tính ngẫu nhiên và công bằng trong quá trình chia bảng.
+Điều 5. Vòng chung kết và điều kiện xét chọn
+- Sau vòng bảng, 02 đội có điểm cao nhất của mỗi bảng được chọn vào vòng
+chung kết, tổng cộng 06 đội.
+- Trường hợp thiếu suất hoặc có các đội bằng điểm, Ban Tổ chức sẽ xét đội có
+điểm cao tiếp theo hoặc tổ chức phần đánh giá bổ sung tối đa 10 phút.
+Điều 6. Tiêu chí chấm điểm
+1. Vòng bảng:
++ Xử lý dữ liệu thời gian thực và độ chính xác: 30%
++ Hiệu quả ứng dụng AI: 30%
++ Tính phù hợp với Domain và trải nghiệm người dùng: 20%
++ Ý tưởng, Demo và Pitching: 20%
+2. Vòng chung kết:
++ Độ hoàn thiện và ổn định của sản phẩm: 30%
++ Năng lực phân tích và hỗ trợ quyết định của AI: 30%
++ Tính sáng tạo, khả năng mở rộng và ứng dụng thực tế: 20%
++ Kỹ năng Demo, trình bày và phản biện: 20%
+Điều 7. Quy định về đạo đức và bản quyền
++ Nghiêm cấm mọi hành vi gian lận, đạo nhái, vi phạm bản quyền hoặc can thiệp
+trái phép vào hệ thống thi đấu.
++ Sản phẩm nộp dự thi phải là kết quả làm việc của chính đội thi trong thời gian
+cuộc thi.
++ BTC có quyền loại bỏ hoặc thu hồi kết quả nếu phát hiện vi phạm.
+Điều 8. Đối tượng tham gia
+Sinh viên ngành Công nghệ thông tin đang theo học tại trường Đại học FPT cơ sở
+TP.HCM và các trường Đại học khác trên địa bàn TP.HCM được mời theo thư mời của
+BTC.
+IV. QUY CHẾ THỂ LỆ KHÁC
+- Sinh viên đã tốt nghiệp không được tham gia cuộc thi.
+- Một thí sinh chỉ được tham gia một đội thi.
+- Ngôn ngữ & công cụ linh hoạt theo năng lực Team.
+- Các thí sinh đảm bảo tham gia đầy đủ các nội dung của thi: Workshop, Khai
+mạc và họp đội thi, Code - thuyết trình và Bế mạc
+- Trong suốt quá trình cuộc thi diễn ra, các thí sinh không được phép rời khỏi khu
+vực dự thi. Mọi trường hợp khác cần có sự đồng ý, ý kiến từ Ban tổ chức.
+- Đội thi có hành động gian lận, sao chép bài thi khác sẽ bị loại khỏi cuộc thi.
+- Sau thời gian kết thúc đăng ký các đội thi không được thay đổi thành viên.
+- Thí sinh cần tuân thủ tuyệt đối theo mọi quy định và điều lệ của cuộc thi, cung
+cấp các thông tin mà Ban tổ chức yêu cầu. Nếu thí sinh vi phạm, Ban tổ chức có toàn
+quyền quyết định hủy kết quả dự thi của thí sinh hoặc đội thi đó.
+- Ban tổ chức có quyền sử dụng toàn bộ hình ảnh của thí sinh cho các mục đích
+truyền thông trước, trong và sau sự kiện.
+- Bản quyền sản phẩm thuộc Team, BTC được quyền sử dụng cho truyền thông
+và đào tạo.
+V. CƠ CẤU GIẢI THƯỞNG SEAL HACKATHON SPRING 2026
+- Giấy chứng nhận: Tất cả các thí sinh tham gia cuộc thi.
+- 01 Giải Nhất: x.000.000 đồng + giấy chứng nhận + hoa;
+- 01 Giải Nhì: x.000.000 đồng + giấy chứng nhận + hoa;
+- 01 Giải Ba: x.000.000 đồng + giấy chứng nhận + hoa;
+- 01 Giải Khuyến khích: x.000.000 đồng + giấy chứng nhận;
+BAN TỔ CHỨC CUỘC THI SEAL HACKATHON
+Trân trọng

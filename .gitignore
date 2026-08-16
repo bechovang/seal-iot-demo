@@ -1,0 +1,17 @@
+# --- datasets (tải từ nguồn, xem tai lieu/bo-du-lieu/*.html) ---
+*.zip
+*.csv.gz
+*.csv
+*.parquet
+*.h5
+
+# --- node / tooling ---
+node_modules/
+npm-debug.log*
+_smoke/
+*.tmp
+
+# --- OS junk ---
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI-Ops Commander · Smart Factory Multi-Agent Control Room</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<!-- ============ TOP STATUS BAR ============ -->
+<header id="topbar">
+  <div class="brand">
+    <div class="logo">⟁</div>
+    <div>
+      <div class="title">AI-OPS COMMANDER</div>
+      <div class="subtitle">Neuro-Symbolic Multi-Agent · Smart Factory · Track C</div>
+    </div>
+  </div>
+  <div class="status-cluster">
+    <span class="status-chip" id="mqttChip"><i class="dot red"></i>MQTT <b id="mqttState">DISCONNECTED</b></span>
+    <span class="status-chip"><i class="dot"></i>Edge AI <b>ADWIN+Kalman</b></span>
+    <span class="status-chip"><i class="dot"></i>Agents <b>7</b></span>
+    <span class="clock" id="clock">--:--:--</span>
+  </div>
+  <div class="power">
+    <button id="panicBtn" class="btn danger ghost">⏻ EMERGENCY STOP</button>
+  </div>
+</header>
+
+<!-- ============ LAYOUT ============ -->
+<main id="layout">
+
+  <!-- LEFT: Live Telemetry -->
+  <section id="telemetry" class="panel">
+    <div class="panel-head">
+      <h2>📡 INDUSTRIAL IOT — LIVE TELEMETRY</h2>
+      <span class="tag green">STREAMING</span>
+    </div>
+    <div id="deviceGrid"></div>
+  </section>
+
+  <!-- CENTER: Agent orchestration -->
+  <section id="orchestra" class="panel">
+    <div class="panel-head">
+      <h2>🧠 MULTI-AGENT ORCHESTRATION</h2>
+      <span class="tag cyan">MCP / TOOLS</span>
+    </div>
+    <div id="taskLauncher">
+      <input id="taskInput" type="text" placeholder='Nhập yêu cầu vận hành...  ví dụ: "chuẩn bị kế hoạch kiểm tra MOTOR_01 trước ca sau"' autocomplete="off">
+      <button id="taskSubmit" class="btn primary">▶ RUN</button>
+      <div class="scenarios">
+        <button class="scenario" data-device="MOTOR_01" data-type="inspection">S1 · Kiểm tra MOTOR_01</button>
+        <button class="scenario" data-device="GAS_01" data-type="conflict">S2 · Xung đột Gas vs Đơn gấp</button>
+        <button class="scenario" data-device="LINE_01" data-type="timeout">S3 · Tool timeout LINE_01</button>
+      </div>
+    </div>
+    <div id="tracePanel">
+      <div id="traceHead" class="trace-row head"><span>#</span><span>KIND</span><span>AGENT / TOOL</span><span>DETAIL / AUDIT TRACE</span></div>
+      <div id="traceBody"></div>
+    </div>
+  </section>
+
+  <!-- RIGHT: Decisions / approvals / workorders -->
+  <section id="ops" class="panel">
+    <div class="panel-head">
+      <h2>🎯 DECISION & APPROVAL GATE</h2>
+      <span class="tag cyan">HITL</span>
+    </div>
+    <div id="kpis" class="grid-2"></div>
+    <div class="block">
+      <h3>🔔 Pending approvals</h3>
+      <div id="approvalList"></div>
+    </div>
+    <div class="block">
+      <h3>📋 Work orders</h3>
+      <div id="woList"></div>
+    </div>
+    <div class="block">
+      <h3>📚 Runbook wiki (learning)</h3>
+      <div id="runbookList"></div>
+    </div>
+  </section>
+
+  <!-- BOTTOM: Engineering deep-dive -->
+  <section id="eng" class="panel full">
+    <div class="panel-head">
+      <h2>⚙ ENGINEERING DEEP-DIVE — EDGE INTELLIGENCE</h2>
+      <div class="tabs">
+        <button class="tab active" data-view="fleet">🤖 Agent Fleet & Runbook</button>
+        <button class="tab" data-view="twin">What-If Digital Twin</button>
+        <button class="tab" data-view="causal">Causal RCA Graph</button>
+        <button class="tab" data-view="drift">ADWIN / Kalman</button>
+      </div>
+    </div>
+    <div class="view" id="view-fleet">
+      <div class="fleet-stats" id="fleetStats"></div>
+      <div class="fleet-wrap">
+        <div class="fleet-left">
+          <h3>Orchestration pipeline — live agent activity</h3>
+          <div class="fleet-pipeline" id="agentBoard"></div>
+          <div class="dim" style="font-size:10px;margin-top:10px">
+            Card sáng lên khi agent đang phát thông điệp · số msg = tổng lượt hoạt động từ lúc boot · hàng last-action là message mới nhất.
+            Stage 3 chạy <b>song song</b> (Maintenance / Production / Safety) — safety gate không bao giờ bị bỏ qua kể cả khi hit runbook.
+          </div>
+        </div>
+        <div class="fleet-right">
+          <h3>Runbook wiki — knowledge compounding</h3>
+          <div id="runbookBoard"></div>
+          <h3 style="margin-top:10px">Knowledge ops log</h3>
+          <div id="runbookLogView" class="rb-log"></div>
+        </div>
+      </div>
+    </div>
+    <div class="view hidden" id="view-twin">
+      <div class="two-col">
+        <div>
+          <h3>Simulated futures per candidate action</h3>
+          <canvas id="twinChart" width="760" height="260"></canvas>
+        </div>
+        <div>
+          <h3>Objective function scoring</h3>
+          <div id="objectiveTable"></div>
+        </div>
+      </div>
+    </div>
+    <div class="view hidden" id="view-causal">
+      <div class="two-col">
+        <div>
+          <h3>Correlation-driven causal graph (online lag-correlation)</h3>
+          <canvas id="causalCanvas" width="740" height="280"></canvas>
+        </div>
+        <div>
+          <h3>Detected edge strengths</h3>
+          <div id="causalTable"></div>
+        </div>
+      </div>
+    </div>
+    <div class="view hidden" id="view-drift">
+      <div class="two-col">
+        <div><h3>ADWIN changing-points per signal</h3><canvas id="adwinCanvas" width="760" height="260"></canvas></div>
+        <div>
+          <h3>Streaming estimator (Kalman vs raw)</h3>
+          <canvas id="kalmanCanvas" width="760" height="240"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="syslog-overlay"><div id="syslog"></div></div>
+
+<script src="js/algorithms.js"></script>
+<script src="js/simulator.js"></script>
+<script src="js/agents.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
