@@ -20,6 +20,7 @@
     <span class="status-chip" id="mqttChip"><i class="dot red"></i>MQTT <b id="mqttState">DISCONNECTED</b></span>
     <span class="status-chip"><i class="dot"></i>Edge AI <b>ADWIN+Kalman</b></span>
     <span class="status-chip"><i class="dot"></i>Agents <b>7</b></span>
+    <span class="status-chip clickable" id="liveChip" title="Bật/tắt REALTIME — nối broker thật của BTC (MQTT-over-WSS)"><i class="dot" id="liveDot"></i>REALTIME <b id="liveState">SIM</b></span>
     <span class="status-chip clickable" id="llmChip" title="Bấm để cấu hình OpenRouter key"><i class="dot red" id="llmDot"></i>Neuro-LLM <b id="llmState">SYMBOLIC-ONLY</b></span>
     <span class="clock" id="clock">--:--:--</span>
   </div>
@@ -165,6 +166,7 @@
 <script src="js/algorithms.js"></script>
 <script src="js/simulator.js"></script>
 <script src="js/agents.js"></script>
+<script src="js/mqtt-client.js"></script>
 <script src="js/llm.js"></script>
 <script src="js/main.js"></script>
 </body>

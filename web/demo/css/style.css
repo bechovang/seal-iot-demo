@@ -170,3 +170,10 @@ table.dt th{color:var(--dim);font-size:10px}
 .chat-input{display:flex;gap:6px}
 .chat-input input{flex:1;background:#0d1626;border:1px solid #1b2a44;border-radius:6px;color:#dbe7f8;padding:6px 9px;font-size:11px;font-family:inherit}
 .chat-input input:focus{outline:none;border-color:var(--cyan)}
+
+/* REALTIME mode */
+.dot.amber{background:var(--amber)!important}
+.dot.blink{background:var(--red)!important;animation:blink .7s infinite alternate}
+.dev-card.offline{opacity:.55;border-style:dashed}
+#liveChip{cursor:pointer}
+#liveChip:hover{border-color:var(--red)}

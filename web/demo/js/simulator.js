@@ -169,10 +169,35 @@ class SimBroker {
 
   getDeviceFault(id) { return this.sims[id].faults; }
   getHistory(id) { return this.history[id]; }
+
+  // REALTIME mode: inject a real broker frame (BTC contract) into the fabric.
+  // Reuses the exact same publish path as the simulator, so the whole edge
+  // intelligence pipeline (ADWIN + Kalman + causal + agents) runs on live data.
+  ingest(deviceCode, metrics, ts) {
+    const sim = this.sims[deviceCode];
+    if (!sim) return false;
+    Object.keys(metrics || {}).forEach(m => {
+      if (sim.metrics.indexOf(m) < 0) return;
+      const v = Number(metrics[m]);
+      if (!isFinite(v)) return;
+      sim.values[m] = v;
+      const h = this.history[deviceCode][m];
+      h.push([ts, v]);
+      if (h.length > 80) h.shift();
+    });
+    this.tickCount++;
+    const vals = {};
+    sim.metrics.forEach(m => (vals[m] = sim.values[m]));
+    this.publish(DEVICES[deviceCode].topic, { device: deviceCode, values: vals, ts, tick: this.tickCount, source: 'LIVE' });
+    return true;
+  }
+
   getDeviceStatus() {
     const st = {};
     Object.values(this.sims).forEach(sim => {
-      st[sim.id] = Object.keys(sim.faults).length > 0 ? 'ANOMALY' : 'NORMAL';
+      if (sim.liveStatus === 'offline') st[sim.id] = 'OFFLINE';
+      else if (sim.liveStatus === 'error' || Object.keys(sim.faults).length > 0) st[sim.id] = 'ANOMALY';
+      else st[sim.id] = 'NORMAL';
     });
     return st;
   }

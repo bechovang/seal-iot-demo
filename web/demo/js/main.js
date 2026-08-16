@@ -109,11 +109,12 @@
     Object.keys(DEVICES).forEach(d => {
       const sim = state.broker.sims[d];
       const norms = { MOTOR_01: { current: 45, vibration: 1.5, temperature: 55 }, LINE_01: { voltage: 415, current: 120 }, CONVEYOR_01: { speed: 1.2, load: 180 }, PRESS_01: { pressure: 5.2 }, GAS_01: { gas: 12 }, PROBE_01: { temperature: 420 } };
-      const anom = Object.keys(sim.faults).length > 0;
+      const offline = sim.liveStatus === 'offline';
+      const anom = Object.keys(sim.faults).length > 0 || sim.liveStatus === 'error';
       const card = document.createElement('div');
-      card.className = 'dev-card' + (anom ? ' anom' : '') + (anomEvidence(d) ? ' warn' : '');
+      card.className = 'dev-card' + (anom ? ' anom' : '') + (anomEvidence(d) ? ' warn' : '') + (offline ? ' offline' : '');
       card.id = 'dev-' + d;
-      card.innerHTML = `<div class="dev-head"><span class="dev-name">${d}</span><span class="dev-status ${anom ? 'anom' : 'ok'}">${anom ? 'ANOMALY' : 'NOMINAL'}</span></div>
+      card.innerHTML = `<div class="dev-head"><span class="dev-name">${d}</span><span class="dev-status ${offline ? 'warn' : anom ? 'anom' : 'ok'}">${offline ? 'OFFLINE' : anom ? 'ANOMALY' : 'NOMINAL'}${live.mode === 'LIVE' ? ' ·L' : ''}</span></div>
         <div class="metrics"></div><div class="dim" style="font-size:9px;margin-top:4px">${DEVICES[d].topic}</div>`;
       const mb = card.querySelector('.metrics');
       DEVICES[d].metrics.forEach(m => {
@@ -242,6 +243,7 @@
       if (sim) sim.clearAllFaults();   // mitigation applied to the fabric
       state.tools.notify({ channel: 'sms', to: 'shift-lead', message: `${action} executed on ${device} after human approval`, ref: id });
       traceRow('TOOL', 'Factory Action', `Post-approval commit → ${wo.id} (${action} on ${device}); mitigation applied.`);
+      publishJudgeAction(device, action);   // REALTIME: báo hành động đã duyệt lên kênh judge
       emitSyslog(`✅ Human decision ${decision} → executed "${action}" on ${device}`);
       updateKpi({ wos: state.tools.workOrders.length });
     } else {
@@ -636,6 +638,128 @@
       appendChat('ai', symbolicAnswer(q, st));
     }
   }
+
+  /* ------------- REALTIME mode: broker thật của BTC (MQTT-over-WSS) ------------- */
+  const live = { mode: 'SIM', client: null, frames: 0, skipped: 0, lastFrameAt: 0, scenario: null, retries: 0, retryTimer: null };
+  const liveCfg = () => (typeof window !== 'undefined' && window.__MQTT_REAL__) || null;
+
+  function updateLiveChip() {
+    const st = $('#liveState'); const dot = $('#liveDot');
+    if (!st || !dot) return;
+    dot.classList.remove('blink', 'amber', 'red');
+    if (live.mode === 'SIM') st.textContent = 'SIM';
+    else if (live.mode === 'CONNECTING') { st.textContent = 'CONNECTING…'; dot.classList.add('amber'); }
+    else if (live.mode === 'LIVE') {
+      const stale = live.lastFrameAt && Date.now() - live.lastFrameAt > 20000;
+      st.textContent = `LIVE · ${live.frames} fr${stale ? ' STALE' : ''}`;
+      dot.classList.add('blink'); if (stale) dot.classList.add('amber');
+    } else if (live.mode === 'ERROR') { st.textContent = 'LIVE LOST'; dot.classList.add('red'); }
+  }
+
+  function liveConnect() {
+    const cfg = liveCfg();
+    if (!cfg || typeof MiniMQTT === 'undefined') return;
+    if (live.client) { live.client.disconnect(); live.client = null; }
+    live.mode = 'CONNECTING'; updateLiveChip();
+    const url = `wss://${cfg.host}:${cfg.port || 443}${cfg.path || '/mqtt'}`;
+    const client = new MiniMQTT(url, {
+      username: cfg.username, password: cfg.password,
+      clientId: 'aiops-cmd-' + Math.random().toString(36).slice(2, 8),
+      onConnect: () => {
+        client.subscribe(cfg.subTopic);
+        live.mode = 'LIVE'; live.retries = 0; live.lastFrameAt = Date.now();
+        state.broker.paused = true;   // dữ liệu thật thay simulator
+        emitSyslog(`🔴 REALTIME ONLINE — wss://${cfg.host}${cfg.path} · sub ${cfg.subTopic}`);
+        traceRow('TOOL', 'MQTT-WSS', `CONNECT ok (user=${cfg.username}) → SUBSCRIBE ${cfg.subTopic}`);
+        updateLiveChip();
+      },
+      onSuback: () => traceRow('VERIFY', 'MQTT-WSS', 'SUBACK xác nhận — pipeline ADWIN/Kalman/causal đang ăn dữ liệu thật.'),
+      onMessage: onLiveMessage,
+      onError: m => emitSyslog(`⚠ REALTIME: ${m}`),
+      onClose: () => liveLost('mất kết nối'),
+    });
+    live.client = client;
+    client.connect();
+  }
+
+  function liveLost(reason) {
+    if (live.mode === 'SIM') return;
+    live.client = null;
+    if (live.retries < 5) {
+      live.retries++;
+      live.mode = 'CONNECTING';
+      state.broker.paused = false;   // show vẫn sống trong lúc nối lại
+      emitSyslog(`🔌 REALTIME ${reason} — tự nối lại ${live.retries}/5 (sim chạy nền).`);
+      if (live.retryTimer) clearTimeout(live.retryTimer);
+      live.retryTimer = setTimeout(liveConnect, 6000);
+    } else {
+      live.mode = 'ERROR';
+      state.broker.paused = false;
+      emitSyslog('⛔ REALTIME quá 5 lần retry (broker BTC có thể đang bận/sập) — về SIM. Bấm chip REALTIME để thử lại.');
+    }
+    updateLiveChip();
+  }
+
+  function toggleLive() {
+    if (live.mode === 'SIM' || live.mode === 'ERROR') {
+      const cfg = liveCfg();
+      if (!cfg || typeof MiniMQTT === 'undefined') { emitSyslog('⚠ Thiếu cấu hình MQTT thật (js/config.js — xem config.example.js).'); return; }
+      if (live.retryTimer) { clearTimeout(live.retryTimer); live.retryTimer = null; }
+      live.retries = 0; live.frames = 0; live.skipped = 0;
+      emitSyslog(`📡 Đang nối broker BTC wss://${cfg.host}:${cfg.port}${cfg.path || '/mqtt'}…`);
+      liveConnect();
+    } else {
+      if (live.retryTimer) { clearTimeout(live.retryTimer); live.retryTimer = null; }
+      if (live.client) { live.client.disconnect(); live.client = null; }
+      live.mode = 'SIM'; live.scenario = null;
+      state.broker.paused = false;
+      Object.keys(DEVICES).forEach(d => delete state.broker.sims[d].liveStatus);
+      emitSyslog('🟢 Đã tắt REALTIME — simulator chạy lại.');
+      updateLiveChip();
+    }
+  }
+
+  function onLiveMessage(topic, payload) {
+    let frame;
+    try { frame = JSON.parse(payload); } catch (e) { live.skipped++; return; }
+    const cfg = liveCfg();
+    if (frame.teamCode && cfg && cfg.teamCode && frame.teamCode !== cfg.teamCode) { live.skipped++; return; }
+    live.frames++; live.lastFrameAt = Date.now();
+    const ts = frame.epoch ? frame.epoch * 1000 : Date.now();
+    (frame.devices || []).forEach(d => {
+      if (!DEVICES[d.deviceCode]) { live.skipped++; return; }
+      state.broker.sims[d.deviceCode].liveStatus = d.status || 'ok';
+      state.broker.ingest(d.deviceCode, d.metrics || {}, ts);
+    });
+    if (frame.scenario && frame.scenario !== live.scenario) {
+      live.scenario = frame.scenario;
+      emitSyslog(`🎬 Judge scenario → ${frame.scenario}`);
+      traceRow('TRACE', 'BTC-Broker', `scenario=${frame.scenario} · ${(frame.devices || []).length} devices · epoch=${frame.epoch || '?'}`);
+    }
+    updateAnomalyKpi();
+    updateLiveChip();
+  }
+
+  /* publish hành động đã được người duyệt lên kênh judge (đúng contract BTC) */
+  function publishJudgeAction(device, action) {
+    const cfg = liveCfg();
+    if (!cfg || live.mode !== 'LIVE' || !live.client) return false;
+    const sim = state.broker.sims[device];
+    const metrics = {};
+    sim.metrics.forEach(m => (metrics[m] = +Number(sim.values[m]).toFixed(1)));
+    const frame = {
+      timestamp: new Date().toISOString(),
+      epoch: Math.floor(Date.now() / 1000),
+      environment: 'FACTORY',
+      scenario: live.scenario || 'NORMAL',
+      teamCode: cfg.teamCode,
+      devices: [{ deviceCode: device, status: 'ok', metrics }],
+    };
+    live.client.publish(cfg.pubTopic, JSON.stringify(frame));
+    traceRow('TOOL', 'MQTT-WSS', `PUBLISH ${cfg.pubTopic} · action="${action}" · ${device} (contract frame)`);
+    emitSyslog(`📤 REALTIME: publish hành động đã duyệt lên kênh judge (${device}).`);
+    return true;
+  }
   function makePrompt(device, type) {
     const start = DEVICES[device].type;
     if (type === 'inspection') return `Hãy chuẩn bị kế hoạch kiểm tra ${device} trước ca sản xuất tiếp theo.`;
@@ -700,6 +824,7 @@
       runTask(dev, type, v);
     });
     $$('.scenario').forEach(b => b.addEventListener('click', () => {
+      if (live.mode === 'LIVE') emitSyslog('ℹ Đang REALTIME — dữ liệu thật từ giám khảo; fault injection chỉ áp ở chế độ SIM.');
       const d = b.dataset.device, t = b.dataset.type;
       if (t === 'conflict') injectFault('GAS_01', 'gas_false', 55);
       if (t === 'inspection') injectFault('MOTOR_01', 'overheat', 5);
@@ -745,6 +870,23 @@
         traceRow('AGENT', 'Neuro-LLM', '🔬 Causal hypothesis đã sinh từ lag-correlation graph.');
       } catch (e) { hypo.textContent = '⚠ LLM lỗi: ' + e.message; }
     });
+
+    // REALTIME chip
+    const liveChipEl = $('#liveChip');
+    if (liveChipEl) liveChipEl.addEventListener('click', toggleLive);
+    setInterval(() => { if (live.mode === 'LIVE') updateLiveChip(); }, 2000);
+    updateLiveChip();
+
+    // Auto-attach to the real BTC MQTT broker (wss://mqtt-hackathon.lexatek.vn:443/mqtt)
+    // on startup. If the broker is unreachable, the built-in retry/fallback keeps
+    // the dashboard live in SIM mode until connectivity returns (or click REALTIME).
+    setTimeout(() => {
+      const cfg = liveCfg();
+      if (cfg && cfg.host && cfg.username && typeof MiniMQTT !== 'undefined' && live.mode === 'SIM') {
+        emitSyslog(`📡 Auto-connect REALTIME broker ${cfg.host}:${cfg.port || 443} -> sub ${cfg.subTopic}`);
+        liveConnect();
+      }
+    }, 1200);
 
     bindTabs();
     renderKpi(); renderWO(); renderRunbooks();
