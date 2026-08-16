@@ -528,12 +528,9 @@
     return txt;
   }
 
-  /* ------------- Neuro-LLM: báo cáo RCA viết từ audit trail ------------- */
+  /* ------------- Neuro-LLM: báo cáo RCA + chưng cất SOP từ audit trail ------------- */
   function maybeLLMReport(ctx) {
     if (!ctx || typeof LLM === 'undefined' || !LLM.available()) return;
-    const box = $('#reportBox');
-    box.classList.remove('dim');
-    box.textContent = `🧠 ${LLM.MODEL} đang viết báo cáo từ audit trail ${ctx.taskId}…`;
     const payload = {
       taskId: ctx.taskId, device: ctx.device, taskType: ctx.taskType, userText: ctx.userText,
       runbookHit: !!ctx.runbookHit,
@@ -545,6 +542,10 @@
       workOrder: ctx.workOrderId || null,
       verification: ctx.verification && ctx.verification.ok ? 'VERIFIED' : 'FAILED',
     };
+    // (a) incident report
+    const box = $('#reportBox');
+    box.classList.remove('dim');
+    box.textContent = `🧠 ${LLM.MODEL} đang viết báo cáo từ audit trail ${ctx.taskId}…`;
     LLM.incidentReport(payload)
       .then(txt => {
         box.textContent = txt;
@@ -554,6 +555,20 @@
       .catch(e => {
         box.textContent = `⚠ LLM report lỗi (${e.message}) — audit trail vẫn đầy đủ trong trace.`;
       });
+    // (b) LLM tinh chỉnh SOP runbook vừa chưng cất (chỉ với ca suy luận đầy đủ, xử lý thành công)
+    if (!ctx.runbookHit && ctx.verification && ctx.verification.ok) {
+      const rbId = `${ctx.device}/${ctx.taskType}`;
+      LLM.distillSOP(payload)
+        .then(txt => {
+          const rb = getRunbooks().find(r => r.id === rbId);
+          if (rb && txt && txt.length > 20) {
+            rb.content = txt; rb.llmRefined = true;
+            pushRunbookLog('distill', `✨ LLM tinh chỉnh SOP "${rbId}" từ audit trail — runbook "khôn" hơn`);
+            renderRunbookBoard(); renderRunbooks();
+          }
+        })
+        .catch(() => {});
+    }
   }
 
   /* ------------- Neuro-LLM chip (config key) ------------- */
@@ -563,6 +578,63 @@
     st.textContent = on ? LLM.MODEL.split('/').pop() : 'SYMBOLIC-ONLY';
     const dot = $('#llmDot');
     if (dot) { dot.classList.toggle('red', !on); if (on) dot.classList.add('green'); }
+  }
+
+  /* ------------- Operator chat: LLM + live factory state ------------- */
+  function liveFactoryState() {
+    const out = { deviceStatus: {}, telemetry: {}, activeFaults: [], pendingApprovals: [],
+      recentWorkOrders: [], runbooks: [], causalEdges: [] };
+    if (!state.broker) return out;
+    out.deviceStatus = state.broker.getDeviceStatus();
+    Object.keys(DEVICES).forEach(d => {
+      out.telemetry[d] = state.broker.sims[d].snapshot().values;
+      if (Object.keys(state.broker.sims[d].faults).length) out.activeFaults.push(d);
+    });
+    out.pendingApprovals = state.tools.approvals.filter(a => a.status === 'PENDING').map(a => a.title);
+    out.recentWorkOrders = state.tools.workOrders.slice(-5).map(w => `${w.id} ${w.device} ${w.status}`);
+    out.runbooks = getRunbooks().map(r => `${r.id}×${r.occurrences}`);
+    out.causalEdges = causalNodes.map(e => `${e.from}→${e.to} (${e.weight.toFixed(2)})`);
+    return out;
+  }
+  function symbolicAnswer(q, st) {
+    const anom = Object.entries(st.deviceStatus).filter(([, v]) => v === 'ANOMALY').map(([d]) => d);
+    return `[SYMBOLIC-ONLY] Trạng thái hiện tại: ${anom.length ? 'ANOMALY trên ' + anom.join(', ') : 'các thiết bị bình thường'}.
+` +
+      `Fault đang inject: ${st.activeFaults.join(', ') || 'không có'}.
+` +
+      `Approval chờ người duyệt: ${st.pendingApprovals.length}. WO gần nhất: ${st.recentWorkOrders.join('; ') || 'chưa có'}.
+` +
+      `Runbook đã học: ${st.runbooks.join(', ') || 'wiki trống'}.
+(Bật Neuro-LLM ở chip topbar để có câu trả lời thông minh hơn.)`;
+  }
+  function appendChat(role, text) {
+    const box = $('#chatBox');
+    const div = document.createElement('div');
+    div.className = 'chat-msg ' + role;
+    div.textContent = text;
+    box.appendChild(div);
+    while (box.children.length > 14) box.firstChild.remove();
+    box.scrollTop = box.scrollHeight;
+    return div;
+  }
+  async function chatSend() {
+    const inp = $('#chatInput');
+    const q = inp.value.trim();
+    if (!q) return;
+    inp.value = '';
+    appendChat('user', q);
+    const st = liveFactoryState();
+    if (typeof LLM !== 'undefined' && LLM.available()) {
+      const holder = appendChat('ai', '🧠 Đang phân tích live state…');
+      try {
+        const a = await LLM.chatAssistant(q, st);
+        holder.textContent = a;
+      } catch (e) {
+        holder.textContent = '⚠ LLM lỗi (' + e.message + ') → fallback symbolic:\n' + symbolicAnswer(q, st);
+      }
+    } else {
+      appendChat('ai', symbolicAnswer(q, st));
+    }
   }
   function makePrompt(device, type) {
     const start = DEVICES[device].type;
@@ -637,8 +709,7 @@
     $('#panicBtn').addEventListener('click', () => { clearFaults(); emitSyslog('⏻ E-STOP: all faults cleared, requesting maintenance'); state.tools.createIncident({ device: 'LINE_01', summary: 'Emergency stop invoked by operator', severity: 'HIGH' }); updateUiFromTools(); });
 
     // Neuro-LLM chip: click để dán / đổi OpenRouter key
-    const llmChip = $('#llmChip');
-    if (llmChip) llmChip.addEventListener('click', () => {
+    const llmChip = $('#llmChip');    if (llmChip) llmChip.addEventListener('click', () => {
       const cur = (typeof LLM !== 'undefined') ? LLM.getKey() : '';
       const v = window.prompt('OpenRouter API key (bỏ trống để chạy SYMBOLIC-ONLY):', cur);
       if (v === null) return;
@@ -650,6 +721,29 @@
         emitSyslog(ok ? `✅ Neuro-LLM ONLINE (${LLM.MODEL})` : '⚠ Key không hoạt động / mất mạng — vẫn chạy symbolic bình thường.');
         updateLLMChip();
       });
+    });
+
+    // Operator chat
+    $('#chatSend').addEventListener('click', chatSend);
+    $('#chatInput').addEventListener('keydown', e => { if (e.key === 'Enter') chatSend(); });
+
+    // Causal hypothesis bằng LLM
+    const chBtn = $('#causalLLMBtn');
+    if (chBtn) chBtn.addEventListener('click', async () => {
+      const hypo = $('#causalHypo');
+      if (!causalNodes.length) { hypo.textContent = 'Chưa có cạnh nhân quả nào — chờ telemetry tích lũy hoặc inject fault.'; return; }
+      if (typeof LLM === 'undefined' || !LLM.available()) { hypo.textContent = '⚠ Neuro-LLM offline — bấm chip Neuro-LLM trên topbar để dán key.'; return; }
+      hypo.textContent = '🧠 LLM đang đọc đồ thị nhân quả + telemetry…';
+      try {
+        const st = liveFactoryState();
+        const txt = await LLM.causalHypothesis({
+          edges: causalNodes.map(e => ({ from: e.from, to: e.to, strength: +e.weight.toFixed(2), lead: e.lead })),
+          activeFaults: st.activeFaults,
+          telemetry: st.telemetry,
+        });
+        hypo.textContent = txt;
+        traceRow('AGENT', 'Neuro-LLM', '🔬 Causal hypothesis đã sinh từ lag-correlation graph.');
+      } catch (e) { hypo.textContent = '⚠ LLM lỗi: ' + e.message; }
     });
 
     bindTabs();

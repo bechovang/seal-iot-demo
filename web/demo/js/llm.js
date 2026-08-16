@@ -101,5 +101,35 @@ Chỉ trả JSON: {"device":"...","taskType":"...","explain":"<1 câu tiếng Vi
     return raw;
   }
 
-  window.LLM = { available, getKey, setKey, ping, parseTask, incidentReport, MODEL };
+  /* ---------- 3) chưng cất SOP runbook từ audit trail (knowledge compounding + LLM) ---------- */
+  async function distillSOP(payload) {
+    const sys = `Bạn là kỹ sư độ tin cậy (SRE) nhà máy. Từ audit trail JSON của một ca xử lý THÀNH CÔNG, viết một SOP chuẩn (runbook) bằng tiếng Việt: tối đa 2 câu, giọng mệnh lệnh ("Giảm...", "Kiểm tra...", "Nếu... thì..."), để agent tái sử dụng cho sự cố tương tự. Chỉ trả về nội dung SOP, không tiêu đề, không giải thích.`;
+    const raw = await chat([
+      { role: 'system', content: sys },
+      { role: 'user', content: JSON.stringify(payload) },
+    ], { timeoutMs: 30000, maxTokens: 700 });
+    return raw;
+  }
+
+  /* ---------- 4) Operator chat — hỏi đáp trạng thái nhà máy từ LIVE state ---------- */
+  async function chatAssistant(question, liveState) {
+    const sys = `Bạn là trợ lý AI vận hành nhà máy thông minh. Trả lời câu hỏi của kỹ sư bằng tiếng Việt, tối đa 4 câu, dựa CHỈ vào LIVE_STATE JSON được cung cấp (telemetry realtime, approvals, work orders, runbooks, causal edges). Nếu dữ liệu không đủ để trả lời, nói rõ. Không bịa số liệu.`;
+    const raw = await chat([
+      { role: 'system', content: sys },
+      { role: 'user', content: `LIVE_STATE=${JSON.stringify(liveState)}\n\nCâu hỏi: ${question}` },
+    ], { timeoutMs: 30000, maxTokens: 800 });
+    return raw;
+  }
+
+  /* ---------- 5) Causal hypothesis — giải thích đồ thị nhân quả ---------- */
+  async function causalHypothesis(payload) {
+    const sys = `Bạn là chuyên gia phân tích nguyên nhân gốc (RCA) trong nhà máy. Dựa trên các cạnh nhân quả (lag-correlation, strength 0..1, lead = tín hiệu dẫn) và telemetry JSON, viết GIẢ THUYẾT NHÂN QUẢ bằng tiếng Việt: tối đa 4 câu, chỉ ra chuỗi lan truyền khả dĩ nhất và khuyến nghị 1 hành động kiểm chứng. Không bịa số liệu ngoài JSON.`;
+    const raw = await chat([
+      { role: 'system', content: sys },
+      { role: 'user', content: JSON.stringify(payload) },
+    ], { timeoutMs: 30000, maxTokens: 1200 });
+    return raw;
+  }
+
+  window.LLM = { available, getKey, setKey, ping, parseTask, incidentReport, distillSOP, chatAssistant, causalHypothesis, MODEL };
 })();

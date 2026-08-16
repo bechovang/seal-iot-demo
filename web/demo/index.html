@@ -84,6 +84,11 @@
       <h3>🧾 AI Incident Report <span class="tag violet" id="reportModel">LLM</span></h3>
       <div id="reportBox" class="dim">Chưa có báo cáo — chạy một task, LLM sẽ viết tường trình RCA từ audit trail (nếu Neuro-LLM online).</div>
     </div>
+    <div class="block">
+      <h3>💬 Operator Chat <span class="tag cyan">live state</span></h3>
+      <div id="chatBox" class="chat-box"><div class="chat-msg ai">Hỏi tôi về trạng thái nhà máy — vd: “Rủi ro lớn nhất hiện tại là gì?”</div></div>
+      <div class="chat-input"><input id="chatInput" type="text" placeholder="Hỏi về nhà máy..." autocomplete="off"><button id="chatSend" class="btn primary">➤</button></div>
+    </div>
   </section>
 
   <!-- BOTTOM: Engineering deep-dive -->
@@ -137,6 +142,8 @@
         <div>
           <h3>Detected edge strengths</h3>
           <div id="causalTable"></div>
+          <button id="causalLLMBtn" class="btn small" style="margin-top:8px">🧠 LLM hypothesis</button>
+          <div id="causalHypo" class="dim" style="margin-top:8px;font-size:11px;line-height:1.5;white-space:pre-wrap">Bấm để LLM đọc đồ thị nhân quả + telemetry và viết giả thuyết lan truyền sự cố.</div>
         </div>
       </div>
     </div>

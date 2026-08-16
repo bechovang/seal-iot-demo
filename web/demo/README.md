@@ -37,7 +37,7 @@ Chip **Neuro-LLM** trên topbar cho biết trạng thái link LLM. Hai cách b�
 1. Copy `js/config.example.js` → `js/config.js`, điền key (file `config.js` đã gitignore), hoặc
 2. Bấm chip **Neuro-LLM** trên topbar → dán key (lưu localStorage).
 
-Khi ONLINE, LLM được dùng ở **đúng 2 điểm giá trị cao** (và chỉ 2 điểm đó):
+Khi ONLINE, LLM được dùng ở **5 điểm giá trị cao** (và chỉ những điểm đó):
 
 - **Task launcher**: gõ yêu cầu tiếng Việt tự do, vd `"gas tăng mà đơn hàng gấp quá, tính sao?"`
   → LLM parse ra `{device: GAS_01, taskType: conflict}` + giải thích, hiện trên trace.
@@ -45,6 +45,14 @@ Khi ONLINE, LLM được dùng ở **đúng 2 điểm giá trị cao** (và ch�
 - **AI Incident Report**: sau mỗi task, LLM đọc audit trail (telemetry, safety verdict,
   candidates + score, WO, verification) và viết **báo cáo RCA tiếng Việt** vào panel
   "🧾 AI Incident Report". Prompt cấm bịa số liệu ngoài JSON.
+- **LLM Runbook Distillation**: ca suy luận đầy đủ xử lý thành công → runbook mới được
+  chưng cất, rồi **LLM tinh chỉnh SOP** từ chính audit trail đó (log `✨ LLM tinh chỉnh SOP`).
+  Lần sau gặp lại pattern → agent tái sử dụng SOP "khôn" hơn — knowledge compounding có LLM.
+- **💬 Operator Chat**: panel chat bên phải — hỏi bằng tiếng Việt ("Rủi ro lớn nhất hiện tại?"),
+  LLM trả lời dựa trên **live state** nhà máy (telemetry, approvals, WO, runbooks, causal edges).
+  Offline → fallback bản tóm tắt symbolic vẫn trả lời được.
+- **🧠 Causal hypothesis**: tab Causal RCA → bấm "🧠 LLM hypothesis" — LLM đọc đồ thị
+  lag-correlation + telemetry và viết **giả thuyết chuỗi lan truyền sự cố** + khuyến nghị kiểm chứng.
 
 **Nguyên tắc thiết kế**: LLM không bao giờ được trực tiếp gọi tool hay ra quyết định
 thực thi — mọi hành động vẫn đi qua safety gate + HITL approval. LLM là "neuro",
@@ -94,7 +102,10 @@ Bấm **S3**. Tool `/ops/workorders` bị timeout (mất ACK):
 ### Tự do (flex Neuro-LLM nếu ONLINE)
 - Gõ câu tự nhiên, vd: `"MOTOR_01 kêu to bất thường, chuẩn bị kiểm tra trước ca sau"`
   → trace hiện `Neuro-LLM parse → device=MOTOR_01, taskType=inspection` rồi orchestrator chạy.
-- Sau mỗi task, chỉ vào panel **🧾 AI Incident Report**: LLM vừa viết tường trình từ audit trail.
+- Sau mỗi task, chỉ vào panel **🧾 AI Incident Report**: LLM vừa viết tường trình từ audit trail;
+  nếu là ca suy luận đầy đủ, mở tab **Agent Fleet & Runbook** xem log `✨ LLM tinh chỉnh SOP` — runbook vừa "khôn" lên.
+- Hỏi **💬 Operator Chat**: `"Rủi ro lớn nhất hiện tại là gì?"` — LLM trả lời từ live state.
+- Mở tab **Causal RCA** sau khi inject fault → bấm **🧠 LLM hypothesis** nghe AI kể chuỗi lan truyền sự cố.
 - **⏻ EMERGENCY STOP**: xoá toàn bộ fault, tạo incident HIGH, đưa hệ thống về trạng thái an toàn.
 
 ---
@@ -104,7 +115,7 @@ Bấm **S3**. Tool `/ops/workorders` bị timeout (mất ACK):
 | Panel | Thuật toán thật đang chạy | Câu chốt |
 |---|---|---|
 | **Agent Fleet & Runbook** | Pipeline orchestration realtime: 7 agent + Tool Gateway, LED hoạt động, msg counter, runbook wiki có occurrence tracking và ops log hit/apply/distill. | "Nhìn thấy đàn agent suy nghĩ và tích lũy tri thức trực tiếp — không cần mở log." |
-| **Neuro-LLM link** | OpenRouter (deepseek-v4-flash) parse yêu cầu ngôn ngữ tự nhiên + viết báo cáo RCA từ audit trail; kết quả LLM luôn qua validate symbolic, lỗi/mất mạng tự rơi về symbolic-only. | "Neuro-symbolic đúng nghĩa: LLM là phần mềm, ràng buộc an toàn là phần cứng." |
+| **Neuro-LLM link** | OpenRouter (deepseek-v4-flash) ở 5 điểm: parse yêu cầu, viết báo cáo RCA, tinh chỉnh SOP runbook, operator chat theo live state, giả thuyết nhân quả. Mọi kết quả LLM qua validate symbolic; lỗi/mất mạng tự rơi về symbolic-only. | "Neuro-symbolic đúng nghĩa: LLM là phần mềm, ràng buộc an toàn là phần cứng — và tri thức tích lũy có cả phần LLM." |
 | **Device grid + ADWIN/Kalman** | Mỗi tín hiệu MQTT chạy 1 rig **ADWIN** (cửa sổ thích ứng, Hoeffding bound) + 1 bộ **Kalman** scalar. ADWIN báo change-point khi phân phối trôi; Kalman tách nhiễu trước khi agent đọc. | "Anomaly detection chạy ở EDGE, per-signal, online — không retrain." |
 | **Causal RCA Graph** | **Lag-correlation** online giữa mọi cặp tín hiệu → cạnh nhân quả có hướng (lead/lag), vẽ đồ thị động. | "Không chỉ phát hiện anomaly — chỉ ra tín hiệu nào DẪN tới tín hiệu nào." |
 | **What-If Digital Twin** | Planner sinh N phương án, mỗi phương án được **mô phỏng tương lai** trên twin vật lý bậc nhất rồi chấm bằng **hàm mục tiêu đa tiêu chí** trước khi chạm vào nhà máy thật. | "Mọi quyết định đều đã được 'sống thử' trong twin trước khi thực thi." |
