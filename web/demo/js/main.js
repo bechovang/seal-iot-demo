@@ -149,9 +149,80 @@
       if (kh[0].length > 70) { kh[0].shift(); kh[1].shift(); }
       kh[0].push(state.broker.tickCount); kh[1].push(kal.x);
       causalTracker.push(key, normVal(d, m, v));
+      detectAlarm(d, m, v);   // per-signal ngưỡng -> alarm log
     });
     updateDriftViewer();
     updateKalmanViewer();
+  }
+
+  /* ------------- Alarm log: vượt ngưỡng -> báo động (persist localStorage) ------------- */
+  const alarmState = {};   // key(dev.signal) -> { sev, last }
+  function detectAlarm(d, m, v) {
+    if (typeof AlarmLog === 'undefined') return;
+    const sim = state.broker && state.broker.sims[d];
+    const base = sim && sim.norm ? sim.norm[m] : null;
+    if (base == null || base === 0) return;
+    const dev = Math.abs(v - base) / (base || 1);
+    let sev = null;
+    if (dev > 0.5) sev = 'CRITICAL';
+    else if (dev > 0.25) sev = 'WARNING';
+    const key = d + '.' + m;
+    const st = alarmState[key] || (alarmState[key] = { sev: null, last: 0 });
+    const now = Date.now();
+    if (sev) {
+      if (st.sev && st.sev !== sev) AlarmLog.resolve(d, m);   // tăng cấp: đóng mức cũ
+      if (st.sev !== sev) {
+        AlarmLog.record({
+          device: d, signal: m, value: +v.toFixed(2), normal: base,
+          pct: Math.round(dev * 100), severity: sev,
+          source: live.mode === 'LIVE' ? 'live' : 'sim',
+        });
+        st.sev = sev; st.last = now;
+        const lbl = live.mode === 'LIVE' ? 'LIVE' : 'SIM';
+        traceRow('TRACE', 'AlarmLog', `🚨 ${sev} ${d}:${m} vượt ngưỡng ${pctStr(dev)} (${base} → ${v.toFixed(1)}) · ${lbl}`);
+        renderAlarmsSoon();
+      }
+    } else if (st.sev) {
+      AlarmLog.resolve(d, m);
+      traceRow('TRACE', 'AlarmLog', `✅ Phục hồi ${d}:${m} — trở về trong ngưỡng, alarm RESOLVED.`);
+      st.sev = null;
+      renderAlarmsSoon();
+    }
+  }
+  function pctStr(dev) { return Math.round(dev * 100) + '%'; }
+
+  let alarmingTimer = null;
+  function renderAlarmsSoon() { if (alarmingTimer) return; alarmingTimer = setTimeout(() => { alarmingTimer = null; renderAlarmLog(); }, 120); }
+  function renderAlarmLog() {
+    const el = $('#alarmLog'); if (!el) return;
+    if (typeof AlarmLog === 'undefined') { el.innerHTML = '<div class="dim">AlarmLog chưa nạp.</div>'; return; }
+    const rows = AlarmLog.all().slice().reverse();
+    const act = AlarmLog.active();
+    const crit = AlarmLog.bySeverity('CRITICAL');
+    const total = rows.length;
+    const st = $('#alarmStats');
+    if (st) st.innerHTML =
+      `<div class="as-chip">ACTIVE <b class="${act.length ? 'gold' : ''}">${act.length}</b></div>` +
+      `<div class="as-chip">CRITICAL <b class="${crit.length ? 'gold' : ''}">${crit.length}</b></div>` +
+      `<div class="as-chip">TOTAL <b>${total}</b></div>`;
+    if (!total) { el.innerHTML = '<div class="dim">Chưa có alarm nào — inject fault (E-STOP / bảng điều khiển) hoặc đợi drift để log hiện ra.</div>'; return; }
+    el.innerHTML =
+      '<div class="alarm-head"><span>THỜI GIAN</span><span>T/W</span><span>DEVICE:SIGNAL</span><span>SEV</span><span>VALUE / NORM</span><span>DEV%</span><span>SRC</span><span>STATUS</span></div>' +
+      rows.map(a => {
+        const sev = `<span class="${a.severity === 'CRITICAL' ? 'gold' : 'amber'}">${a.severity}</span>`;
+        const status = a.status === 'ACTIVE'
+          ? '<span class="alarm-active">● ACTIVE</span>'
+          : `<span class="alarm-resolved">✓ RESOLVED · ${new Date(a.resolvedTs).toLocaleTimeString('en-GB')}</span>`;
+        const wl = a.windowId ? `<span class="dim">${a.windowId}</span>` : '<span class="dim">–</span>';
+        const dsig = `${a.device}:${a.signal}`;
+        const dsigShort = dsig.replace(':temperature', ':temp').replace(':vibration', ':vib').replace(':current', ':cur');
+        return `<div class="alarm-row ${a.status === 'ACTIVE' ? 'row-active' : ''}">` +
+          `<span>${new Date(a.ts).toLocaleTimeString('en-GB')}</span>${wl}` +
+          `<span>${dsigShort}</span>${sev}` +
+          `<span>${a.value} / ${a.normal}</span>` +
+          `<span>${a.pct}%</span>` +
+          `<span class="${a.source === 'live' ? 'green' : 'dim'}">${a.source.toUpperCase()}</span>${status}</div>`;
+      }).join('');
   }
 
 
@@ -279,6 +350,21 @@
     el.innerHTML = list.slice().reverse().map(r =>
       `<div class="rb-item"><span class="title-sm">${r.id}</span> <span class="violet">×${r.occurrences}</span>
       <div class="dim">${r.device} · ${r.content}</div></div>`).join('');
+  }
+
+  /* Incident Memory — doc-node lịch sử theo thời gian (bên trên AI Incident Report). */
+  function renderIncidentHistory() {
+    const el = $('#incidentHistory'); if (!el) return;
+    if (typeof IncidentMem === 'undefined') { el.innerHTML = ''; return; }
+    const nodes = IncidentMem.all().slice(-8).reverse();
+    if (!nodes.length) { el.innerHTML = '<div class="dim">Chưa có sự cố được ghi — chạy S1/S2/S3 để Incident Memory (doc-node) lưu lại.</div>'; return; }
+    el.innerHTML = '<div class="ih-head"><span>THỜI GIAN</span><span>T/W</span><span>THIẾT BỊ</span><span>SEV</span><span>NỘI DUNG</span></div>' +
+      nodes.map(n => {
+        const sev = `<span class="${n.severity === 'CRITICAL' ? 'gold' : n.severity === 'WARNING' ? 'amber' : 'green'}">${n.severity}</span>`;
+        const doc = (n.kind === 'detected' ? '⚡ ' : '✓ ') + (n.doc || (n.resolved && (n.resolved.doc || n.resolved.action)) || 'không có doc');
+        const wlink = n.windowId ? `<span class="dim">${n.windowId.replace('w-','W')}</span>` : '<span class="dim">–</span>';
+        return `<div class="ih-row"><span>${new Date(n.ts).toLocaleTimeString('en-GB')}</span>${wlink}<span>${n.device || '?'}</span>${sev}<span class="pb">${doc}</span></div>`;
+      }).join('');
   }
 
   /* ------------- Agent Fleet tab: live orchestration showcase ------------- */
@@ -509,6 +595,7 @@
   function injectFault(device, kind, rate) {
     state.broker.sims[device].applyFault(kind, { rate });
     emitSyslog(`⚠ Injected fault ${kind} on ${device}`);
+    detectAnomalyNow(device, kind);
     updateAnomalyKpi();
   }
   function clearFaults() {
@@ -522,6 +609,66 @@
     state.kpi.anomalies = n; renderKpi();
   }
 
+  /* ------------- Incident Memory: ghi doc-node theo thời gian ------------- */
+  const knownAnomalies = {};   // device -> windowId của node detected đang mở
+  const deviceTelemetry = () => {
+    const tel = {};
+    Object.values(state.broker.sims).forEach(s => {
+      if (s && s.values) tel[s.id] = { ...s.values };
+    });
+    return tel;
+  };
+
+  // Gắn LLM doc vào node detected (nếu LLM online) — non-blocking, symbolic vẫn ghi node trước.
+  async function enrichIncidentDoc(node) {
+    if (!node || typeof LLM === 'undefined' || !LLM.available()) return;
+    try {
+      const txt = await LLM.incidentFlash({
+        device: node.device, signal: node.signal, symptoms: node.symptoms,
+        severity: node.severity, telemetry: node.telemetry,
+      });
+      if (txt) { node.doc = txt; IncidentMem.touch(); }
+    } catch (e) { /* không phá flow */ }
+  }
+
+  function detectAnomalyNow(device, faultKind) {
+    const node = IncidentMem.recordDetected({
+      device, signal: null, symptoms: [faultKind || 'anomaly'],
+      severity: 'CRITICAL', telemetry: deviceTelemetry(),
+      meta: { source: live.mode === 'LIVE' ? 'live' : 'sim', fault: faultKind, scenario: live.scenario || null },
+    });
+    knownAnomalies[device] = node.windowId;
+    traceRow('TRACE', 'IncidentMemory', `🧠 Ghi doc-node detected ${node.id} (${device}, sv=${node.severity})`);
+    enrichIncidentDoc(node);
+    renderIncidentHistory();
+  }
+
+  // bắt cả anomaly phát sinh từ drift ADWIN (không qua injectFault) — duyệt định kỳ.
+  setInterval(() => {
+    if (!state.broker) return;
+    const st = state.broker.getDeviceStatus();
+    Object.entries(st).forEach(([dev, status]) => {
+      const had = knownAnomalies[dev];
+      if (status === 'ANOMALY' && !had) detectAnomalyNow(dev, null);
+      else if (status !== 'ANOMALY' && had) { delete knownAnomalies[dev]; }
+    });
+  }, 1200);
+
+  function resolveIncident(ctx) {
+    const windowId = knownAnomalies[ctx.device] || null;
+    IncidentMem.recordResolved(windowId, {
+      device: ctx.device, signal: null,
+      symptoms: (ctx.anomalyMap || []).map(a => a.metric),
+      severity: ctx.safety && ctx.safety.verdict === 'WITHIN LIMITS' ? 'WARNING' : 'INFO',
+      ok: !!(ctx.verification && ctx.verification.ok),
+      action: ctx.chosen ? ctx.chosen.action : (ctx.runbookHit ? 'runbook SOP' : null),
+      workOrderId: ctx.workOrderId || null,
+      rootCause: ctx.runbookHit ? 'runbook-matched' : null,
+    });
+    delete knownAnomalies[ctx.device];
+    renderIncidentHistory();
+  }
+
   /* ------------- run a task through orchestrator ------------- */
   function runTask(device, type, text) {
     let txt = text || makePrompt(device, type);
@@ -532,6 +679,7 @@
 
   /* ------------- Neuro-LLM: báo cáo RCA + chưng cất SOP từ audit trail ------------- */
   function maybeLLMReport(ctx) {
+    resolveIncident(ctx);   // đóng window incident by windowId (node hoàn chỉnh)
     if (!ctx || typeof LLM === 'undefined' || !LLM.available()) return;
     const payload = {
       taskId: ctx.taskId, device: ctx.device, taskType: ctx.taskType, userText: ctx.userText,
@@ -583,9 +731,29 @@
   }
 
   /* ------------- Operator chat: LLM + live factory state ------------- */
-  function liveFactoryState() {
+  /* Tự nhận diện khung thời gian trong câu hỏi (vd "5 phút vừa rồi", "1 tiếng trước"),
+     mặc định 5 phút cho câu kiểu "gần đây". */
+  function questionWindowMs(q) {
+    const m = /(\d+)\s*(ph(ú|u)t|gi(â|a)y|sec|ti(ế|e)ng)/.exec(q);
+    if (!m) return 300000;
+    const n = parseInt(m[1], 10);
+    const prime = m[2].charAt(0);
+    if (prime === 's') return n * 1000;
+    if (prime === 't') return n * 3600000;
+    return n * 60000;
+  }
+  function recentIncidentsFor(q) {
+    if (typeof IncidentMem === 'undefined') return [];
+    const ms = questionWindowMs(q);
+    return IncidentMem.query(Date.now() - ms, 40).map(n => ({
+      id: n.id, at: n.tsISO, windowId: n.windowId, kind: n.kind,
+      device: n.device, severity: n.severity, symptoms: n.symptoms || [],
+      doc: n.doc || null, resolved: n.resolved ? (n.resolved.doc || n.resolved.action) : null,
+    }));
+  }
+  function liveFactoryState(q) {
     const out = { deviceStatus: {}, telemetry: {}, activeFaults: [], pendingApprovals: [],
-      recentWorkOrders: [], runbooks: [], causalEdges: [] };
+      recentWorkOrders: [], runbooks: [], causalEdges: [], recentIncidents: [], _winMs: 300000 };
     if (!state.broker) return out;
     out.deviceStatus = state.broker.getDeviceStatus();
     Object.keys(DEVICES).forEach(d => {
@@ -596,6 +764,8 @@
     out.recentWorkOrders = state.tools.workOrders.slice(-5).map(w => `${w.id} ${w.device} ${w.status}`);
     out.runbooks = getRunbooks().map(r => `${r.id}×${r.occurrences}`);
     out.causalEdges = causalNodes.map(e => `${e.from}→${e.to} (${e.weight.toFixed(2)})`);
+    out.recentIncidents = recentIncidentsFor(q || '');
+    out._winMs = questionWindowMs(q || '');
     return out;
   }
   function symbolicAnswer(q, st) {
@@ -625,7 +795,7 @@
     if (!q) return;
     inp.value = '';
     appendChat('user', q);
-    const st = liveFactoryState();
+    const st = liveFactoryState(q);
     if (typeof LLM !== 'undefined' && LLM.available()) {
       const holder = appendChat('ai', '🧠 Đang phân tích live state…');
       try {
@@ -799,6 +969,17 @@
     setInterval(() => renderDeviceGrid(), 400);
     setInterval(() => computeCausal(), 1200);
     setInterval(() => updateAnomalyKpi(), 3000);
+
+    /* alarm log: render lúc boot + khi store đổi + các nút điều khiển */
+    if (typeof AlarmLog !== 'undefined') {
+      renderAlarmLog();
+      AlarmLog.onChange(() => renderAlarmsSoon());
+    }
+    const clearAlarm = $('#alarmClearBtn');
+    if (clearAlarm) clearAlarm.addEventListener('click', () => {
+      if (typeof AlarmLog !== 'undefined') { AlarmLog.reset(); renderAlarmLog(); emitSyslog('🗑 Đã xóa toàn bộ alarm log.'); }
+    });
+    $('#alarmRefreshBtn').addEventListener('click', () => renderAlarmLog());
     setInterval(() => { if (fleetViewVisible()) renderAgentBoard(); }, 700); // fade live LEDs
 
     // wire task launcher
@@ -891,6 +1072,8 @@
     bindTabs();
     renderKpi(); renderWO(); renderRunbooks();
     renderFleetStats(); renderAgentBoard(); renderRunbookBoard(); renderRunbookLog();
+    renderIncidentHistory();
+    if (typeof IncidentMem !== 'undefined' && IncidentMem.onChange) IncidentMem.onChange(renderIncidentHistory);
     updateLLMChip();
     emitSyslog('System ready. Click a scenario or type a natural-language ops request.');
   });

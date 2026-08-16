@@ -113,13 +113,24 @@ Chỉ trả JSON: {"device":"...","taskType":"...","explain":"<1 câu tiếng Vi
 
   /* ---------- 4) Operator chat — hỏi đáp trạng thái nhà máy từ LIVE state ---------- */
   async function chatAssistant(question, liveState) {
-    const sys = `Bạn là trợ lý AI vận hành nhà máy thông minh. Trả lời câu hỏi của kỹ sư bằng tiếng Việt, tối đa 4 câu, dựa CHỈ vào LIVE_STATE JSON được cung cấp (telemetry realtime, approvals, work orders, runbooks, causal edges). Nếu dữ liệu không đủ để trả lời, nói rõ. Không bịa số liệu.`;
+    const sys = `Bạn là trợ lý AI vận hành nhà máy thông minh. Trả lời câu hỏi của kỹ sư bằng tiếng Việt, tối đa 4 câu, dựa CHỈ vào LIVE_STATE JSON và INCIDENT_LOG (danh sách doc-node sự cố có timestamp, đã lọc theo khung thời gian được hỏi). Nếu câu hỏi như "5 phút vừa rồi có gì" "gần đây bất thường gì": trả lời theo INCIDENT_LOG trong khoảng đó (nêu thời điểm, thiết bị, mức độ, doc ngắn gọn). Nếu dữ liệu không đủ, nói rõ. Không bịa số liệu.`;
     const raw = await chat([
       { role: 'system', content: sys },
       { role: 'user', content: `LIVE_STATE=${JSON.stringify(liveState)}\n\nCâu hỏi: ${question}` },
     ], { timeoutMs: 30000, maxTokens: 800 });
     return raw;
   }
+
+  /* ---------- 4b) incidentFlash — doc-node NGẮN cảnh báo tức thì ---------- */
+  async function incidentFlash(payload) {
+    const sys = `Bạn là kỹ sư vận hành nhà máy. Viết TỐI ĐA 2 câu tiếng Việt mô tả cảnh báo vừa phát hiện: thiết bị/tín hiệu nào, đang bất thường thế nào, rủi ro gì, nên kiểm tra gì. Ngắn gọn, không bịa số liệu ngoài telemetry.`;
+    const raw = await chat([
+      { role: 'system', content: sys },
+      { role: 'user', content: JSON.stringify(payload) },
+    ], { timeoutMs: 15000, maxTokens: 250 });
+    return raw;
+  }
+
 
   /* ---------- 5) Causal hypothesis — giải thích đồ thị nhân quả ---------- */
   async function causalHypothesis(payload) {
@@ -131,5 +142,5 @@ Chỉ trả JSON: {"device":"...","taskType":"...","explain":"<1 câu tiếng Vi
     return raw;
   }
 
-  window.LLM = { available, getKey, setKey, ping, parseTask, incidentReport, distillSOP, chatAssistant, causalHypothesis, MODEL };
+  window.LLM = { available, getKey, setKey, ping, parseTask, incidentReport, distillSOP, chatAssistant, incidentFlash, causalHypothesis, MODEL };
 })();

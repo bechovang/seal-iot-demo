@@ -82,6 +82,10 @@
       <div id="runbookList"></div>
     </div>
     <div class="block">
+      <h3>🗃 Incident Memory — doc-node sự cố theo thời gian <span class="tag violet">persist</span></h3>
+      <div id="incidentHistory"></div>
+    </div>
+    <div class="block">
       <h3>🧾 AI Incident Report <span class="tag violet" id="reportModel">LLM</span></h3>
       <div id="reportBox" class="dim">Chưa có báo cáo — chạy một task, LLM sẽ viết tường trình RCA từ audit trail (nếu Neuro-LLM online).</div>
     </div>
@@ -101,6 +105,7 @@
         <button class="tab" data-view="twin">What-If Digital Twin</button>
         <button class="tab" data-view="causal">Causal RCA Graph</button>
         <button class="tab" data-view="drift">ADWIN / Kalman</button>
+        <button class="tab" data-view="alarms">🚨 Anomaly / Alarm Log</button>
       </div>
     </div>
     <div class="view" id="view-fleet">
@@ -157,6 +162,20 @@
         </div>
       </div>
     </div>
+    <div class="view hidden" id="view-alarms">
+      <div class="alarm-toolbar">
+        <div id="alarmStats"></div>
+        <div>
+          <button id="alarmRefreshBtn" class="btn small">↻ Refresh</button>
+          <button id="alarmClearBtn" class="btn small danger">🗑 Clear log</button>
+        </div>
+      </div>
+      <div class="dim" style="font-size:10px;margin:6px 0 8px">
+        Mỗi tín hiệu telemetry vượt baseline được ghi ngay khi xảy ra (thời gian thật), song song với cảnh báo trên device card.
+        Vượt &gt;25% = <span class="amber">WARNING</span> · vượt &gt;50% = <span class="gold">CRITICAL</span>. Tự lưu vào localStorage nên giữ qua lần refresh.
+      </div>
+      <div id="alarmLog"></div>
+    </div>
   </section>
 </main>
 
@@ -165,6 +184,8 @@
 <script src="js/config.js"></script>
 <script src="js/algorithms.js"></script>
 <script src="js/simulator.js"></script>
+<script src="js/incidents.js"></script>
+<script src="js/alarm-log.js"></script>
 <script src="js/agents.js"></script>
 <script src="js/mqtt-client.js"></script>
 <script src="js/llm.js"></script>

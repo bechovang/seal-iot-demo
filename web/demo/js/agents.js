@@ -366,10 +366,39 @@ class Orchestrator {
 }
 
 /* ---------------- Runbook wiki (knowledge compounding) ---------------- */
-let RUNBOOKS = [
+// Seed mặc định — dùng làm bộ nhớ khởi tạo cho lần đầu chạy trên 1 trình duyệt.
+const RUNBOOK_SEED = [
   { id: 'motor-overheat-fan', device: 'MOTOR_01', symptoms: ['temperature', 'vibration'], occurrences: 3,
     content: 'Reduce load 20% + increase cooling + verify cooling fan → monitor 15s; if persists escalate.' },
 ];
+// Lưu tri thức runbook vào localStorage (Hướng A) → reload/xoá tab vẫn còn đúng máy.
+const RUNBOOKS_KEY = 'aiops_runbooks_v1';
+let RUNBOOKS = (() => {
+  try {
+    const raw = localStorage.getItem(RUNBOOKS_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length) {
+        return arr.map(r => ({
+          id: r.id, device: r.device, taskType: r.taskType || '',
+          symptoms: r.symptoms || [], occurrences: +r.occurrences || 1,
+          content: r.content || '', created: r.created || new Date().toISOString(),
+        }));
+      }
+    }
+  } catch (e) { /* localStorage unavailable/corrupt → fallback seed */ }
+  return RUNBOOK_SEED.map(r => ({ ...r, taskType: r.taskType || '', created: r.created || new Date().toISOString() }));
+})();
+const persistRunbooks = () => {
+  try { localStorage.setItem(RUNBOOKS_KEY, JSON.stringify(RUNBOOKS)); }
+  catch (e) { /* quota/denied → bỏ qua, chỉ mất persist */ }
+};
+// Nút reset tri thức (dùng trong demo): trả wiki về seed ban đầu.
+const resetRunbooks = () => {
+  RUNBOOKS = RUNBOOK_SEED.map(r => ({ ...r, taskType: r.taskType || '', created: r.created || new Date().toISOString() }));
+  persistRunbooks();
+  return RUNBOOKS;
+};
 const lookupRunbook = (device, taskType) => {
   const hit = RUNBOOKS.find(r => r.device === device && (!r.taskType || r.taskType === taskType)) || RUNBOOKS.find(r => r.device === device);
   return hit ? { ...hit } : null;
@@ -377,12 +406,14 @@ const lookupRunbook = (device, taskType) => {
 const distillRunbook = (entry) => {
   const slug = entry.id.toLowerCase();
   if (!RUNBOOKS.find(r => r.id === entry.id)) {
-    RUNBOOKS.push({ id: entry.id, device: entry.device, taskType: entry.taskType, occurrences: 1, content: entry.content, created: new Date().toISOString() });
+    RUNBOOKS.push({ id: entry.id, device: entry.device, taskType: entry.taskType, symptoms: entry.symptoms || [], occurrences: 1, content: entry.content, created: new Date().toISOString() });
   } else {
     const r = RUNBOOKS.find(x => x.id === entry.id); r.occurrences++;
   }
+  persistRunbooks();
 };
 
 window.Orchestrator = Orchestrator;
 window.ToolLayer = ToolLayer;
 window.getRunbooks = () => RUNBOOKS;
+window.resetRunbooks = resetRunbooks;
