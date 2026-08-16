@@ -155,3 +155,9 @@ table.dt th{color:var(--dim);font-size:10px}
 .rb-log .rl:last-child{border-bottom:none}
 .rb-log .rl .t{color:var(--dim);flex:0 0 auto;font-size:9px;padding-top:1px}
 .rb-log .rl.hit{color:var(--cyan)} .rb-log .rl.distill{color:var(--violet)} .rb-log .rl.apply{color:var(--green)}
+
+/* ================= Neuro-LLM ================= */
+.status-chip.clickable{cursor:pointer}
+.status-chip.clickable:hover{border-color:var(--violet)}
+#reportBox{font-size:11px;line-height:1.55;white-space:pre-wrap;max-height:220px;overflow:auto}
+.tag.violet{color:var(--violet);border-color:var(--violet)}

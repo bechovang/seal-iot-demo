@@ -20,6 +20,7 @@
     <span class="status-chip" id="mqttChip"><i class="dot red"></i>MQTT <b id="mqttState">DISCONNECTED</b></span>
     <span class="status-chip"><i class="dot"></i>Edge AI <b>ADWIN+Kalman</b></span>
     <span class="status-chip"><i class="dot"></i>Agents <b>7</b></span>
+    <span class="status-chip clickable" id="llmChip" title="Bấm để cấu hình OpenRouter key"><i class="dot red" id="llmDot"></i>Neuro-LLM <b id="llmState">SYMBOLIC-ONLY</b></span>
     <span class="clock" id="clock">--:--:--</span>
   </div>
   <div class="power">
@@ -78,6 +79,10 @@
     <div class="block">
       <h3>📚 Runbook wiki (learning)</h3>
       <div id="runbookList"></div>
+    </div>
+    <div class="block">
+      <h3>🧾 AI Incident Report <span class="tag violet" id="reportModel">LLM</span></h3>
+      <div id="reportBox" class="dim">Chưa có báo cáo — chạy một task, LLM sẽ viết tường trình RCA từ audit trail (nếu Neuro-LLM online).</div>
     </div>
   </section>
 
@@ -149,9 +154,11 @@
 
 <div id="syslog-overlay"><div id="syslog"></div></div>
 
+<script src="js/config.js"></script>
 <script src="js/algorithms.js"></script>
 <script src="js/simulator.js"></script>
 <script src="js/agents.js"></script>
+<script src="js/llm.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

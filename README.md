@@ -41,6 +41,11 @@ tới 1.6 GB) **không đưa vào repo** vì giới hạn dung lượng GitHub; 
 từ nguồn được ghi trong các file `.html`/`.json` cùng thư mục. Bản demo web dùng
 simulator telemetry tự sinh nên không phụ thuộc file dataset.
 
+**Neuro-LLM (OpenRouter)** là phần tăng cường tuỳ chọn của demo: LLM parse yêu cầu
+tiếng Việt tự do và viết báo cáo RCA từ audit trail. API key đặt trong
+`web/demo/js/config.js` (file này **gitignored** — không bao giờ commit); không có
+key hoặc mất mạng thì demo tự chạy chế độ SYMBOLIC-ONLY đầy đủ.
+
 ## 🔑 Điểm kỹ thuật nổi bật
 
 - **Edge intelligence online**: ADWIN (Hoeffding bound) + Kalman chạy per-signal, không retrain.

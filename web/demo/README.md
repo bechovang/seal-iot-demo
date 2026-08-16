@@ -14,8 +14,10 @@ gọi **Tool/API có idempotency + verify + timeout**, và **tích lũy tri th�
 Chỉ cần mở file  web/demo/index.html  bằng trình duyệt (Chrome/Edge).
 ```
 
-Không cần build, không cần Python/Node, không fetch mạng (mọi thứ chạy nội tuyến).
-Nếu muốn serve qua HTTP (tuỳ chọn):
+Không cần build, không cần Python/Node, không fetch mạng cho phần lõi (mọi thuật toán
+chạy nội tuyến). **Neuro-LLM** (OpenRouter) là phần tăng cường tuỳ chọn — cần mạng
+và API key, nếu không có thì demo tự chạy chế độ **SYMBOLIC-ONLY** đầy đủ.
+Nếu trình duyệt chặn fetch từ `file://`, serve qua HTTP (tuỳ chọn):
 
 ```bash
 cd web/demo
@@ -25,6 +27,28 @@ python -m http.server 8000
 
 Chờ ~3 giây để MQTT fabric kết nối và telemetry chảy vào (chip **MQTT CONNECTED**
 chuyển xanh). Sau đó bấm các nút kịch bản.
+
+---
+
+## 🧠 Neuro-LLM (OpenRouter · deepseek-v4-flash)
+
+Chip **Neuro-LLM** trên topbar cho biết trạng thái link LLM. Hai cách bật:
+
+1. Copy `js/config.example.js` → `js/config.js`, điền key (file `config.js` đã gitignore), hoặc
+2. Bấm chip **Neuro-LLM** trên topbar → dán key (lưu localStorage).
+
+Khi ONLINE, LLM được dùng ở **đúng 2 điểm giá trị cao** (và chỉ 2 điểm đó):
+
+- **Task launcher**: gõ yêu cầu tiếng Việt tự do, vd `"gas tăng mà đơn hàng gấp quá, tính sao?"`
+  → LLM parse ra `{device: GAS_01, taskType: conflict}` + giải thích, hiện trên trace.
+  Kết quả **luôn được validate lại bằng symbolic** (device phải hợp lệ) — LLM hallucinate thì fallback parser cũ.
+- **AI Incident Report**: sau mỗi task, LLM đọc audit trail (telemetry, safety verdict,
+  candidates + score, WO, verification) và viết **báo cáo RCA tiếng Việt** vào panel
+  "🧾 AI Incident Report". Prompt cấm bịa số liệu ngoài JSON.
+
+**Nguyên tắc thiết kế**: LLM không bao giờ được trực tiếp gọi tool hay ra quyết định
+thực thi — mọi hành động vẫn đi qua safety gate + HITL approval. LLM là "neuro",
+luật an toàn là "symbolic".
 
 ---
 
@@ -67,9 +91,10 @@ Bấm **S3**. Tool `/ops/workorders` bị timeout (mất ACK):
 - Trace hiện đầy đủ: `TIMEOUT` → audit → `reuse WO-xxxx, not creating duplicate` → read-back `VERIFIED`.
 - **Điểm flex:** chuẩn vận hành production-grade — at-least-once delivery + chống trùng + xác minh sau ghi.
 
-### Tự do
-- Gõ yêu cầu tiếng Việt vào ô nhập, ví dụ:
-  `chuẩn bị kế hoạch kiểm tra MOTOR_01 trước ca sau` → **RUN**.
+### Tự do (flex Neuro-LLM nếu ONLINE)
+- Gõ câu tự nhiên, vd: `"MOTOR_01 kêu to bất thường, chuẩn bị kiểm tra trước ca sau"`
+  → trace hiện `Neuro-LLM parse → device=MOTOR_01, taskType=inspection` rồi orchestrator chạy.
+- Sau mỗi task, chỉ vào panel **🧾 AI Incident Report**: LLM vừa viết tường trình từ audit trail.
 - **⏻ EMERGENCY STOP**: xoá toàn bộ fault, tạo incident HIGH, đưa hệ thống về trạng thái an toàn.
 
 ---
@@ -79,6 +104,7 @@ Bấm **S3**. Tool `/ops/workorders` bị timeout (mất ACK):
 | Panel | Thuật toán thật đang chạy | Câu chốt |
 |---|---|---|
 | **Agent Fleet & Runbook** | Pipeline orchestration realtime: 7 agent + Tool Gateway, LED hoạt động, msg counter, runbook wiki có occurrence tracking và ops log hit/apply/distill. | "Nhìn thấy đàn agent suy nghĩ và tích lũy tri thức trực tiếp — không cần mở log." |
+| **Neuro-LLM link** | OpenRouter (deepseek-v4-flash) parse yêu cầu ngôn ngữ tự nhiên + viết báo cáo RCA từ audit trail; kết quả LLM luôn qua validate symbolic, lỗi/mất mạng tự rơi về symbolic-only. | "Neuro-symbolic đúng nghĩa: LLM là phần mềm, ràng buộc an toàn là phần cứng." |
 | **Device grid + ADWIN/Kalman** | Mỗi tín hiệu MQTT chạy 1 rig **ADWIN** (cửa sổ thích ứng, Hoeffding bound) + 1 bộ **Kalman** scalar. ADWIN báo change-point khi phân phối trôi; Kalman tách nhiễu trước khi agent đọc. | "Anomaly detection chạy ở EDGE, per-signal, online — không retrain." |
 | **Causal RCA Graph** | **Lag-correlation** online giữa mọi cặp tín hiệu → cạnh nhân quả có hướng (lead/lag), vẽ đồ thị động. | "Không chỉ phát hiện anomaly — chỉ ra tín hiệu nào DẪN tới tín hiệu nào." |
 | **What-If Digital Twin** | Planner sinh N phương án, mỗi phương án được **mô phỏng tương lai** trên twin vật lý bậc nhất rồi chấm bằng **hàm mục tiêu đa tiêu chí** trước khi chạm vào nhà máy thật. | "Mọi quyết định đều đã được 'sống thử' trong twin trước khi thực thi." |
@@ -98,6 +124,8 @@ web/demo/
     ├── algorithms.js     # ADWIN, Kalman, CausalTracker (lag-correlation), WhatIfSim, hàm mục tiêu
     ├── simulator.js      # MQTT fabric giả lập: 6 thiết bị, ~4Hz, fault injection
     ├── agents.js         # ToolLayer (idempotency/verify/timeout) + 7 agent + Orchestrator + runbook wiki
+    ├── llm.js            # Neuro-LLM link (OpenRouter): parse task + incident report, fallback-safe
+    ├── config.example.js # mẫu cấu hình key (copy thành config.js — config.js gitignored)
     └── main.js           # Boot, render dashboard, viewers, scenario buttons, HITL approval handler
 ```
 
